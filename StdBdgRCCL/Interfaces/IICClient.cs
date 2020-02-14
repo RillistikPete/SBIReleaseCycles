@@ -37,6 +37,15 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="pagesize">Records pagesize</param>
         /// <returns>List of records with model specified in Type</returns>
         Task<HttpResponse<List<T>>> GetByExample<T>(string resourceUri, IDictionary<string, string> properties = null, int offset = 0, int pagesize = 100);
+
+        /// <summary>
+        /// Send a GET request with query search parameters for a single json return object
+        /// </summary>
+        /// <typeparam name="T">Resource Model</typeparam>
+        /// <param name="resourceUri">Resource Endpoint URI including the query parameters (ex: "endpoint?customId=123")</param>
+        /// <returns>A single record with model specified in Type</returns>
+        Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new();
+
         /// <summary>
         /// Send a GET request and get all available records.
         /// </summary>

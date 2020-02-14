@@ -10,19 +10,23 @@ using Newtonsoft.Json;
 using StdBdgRCCL.Interfaces;
 using StdBdgRCCL.Infrastructure;
 using System.Net.Http;
+using StdBdgRCCL.Infrastructure.ClientBase;
+using Microsoft.Extensions.Configuration;
 
 namespace StdBadgeReleaseCycles
 {
     public class Function1
     {
-        private readonly HttpClient _edfiClient;
-        private readonly HttpClient _edfiClientComposite;
-        private readonly HttpClient _icClient;
-        public Function1(IHttpClientFactory clientFactory)
+        //private readonly HttpClient _edfiClient;
+        //private readonly HttpClient _edfiClientComposite;
+        //private readonly HttpClient _icClient;
+        private IConfiguration _config;
+        public Function1(IHttpClientFactory clientFactory, IConfiguration configuration)
         {
-            _edfiClient = clientFactory.CreateClient("edfiClient");
-            _icClient = clientFactory.CreateClient("icClient");
-            _edfiClientComposite = clientFactory.CreateClient("edfiClientComposite");
+            //_edfiClient = clientFactory.CreateClient("edfiClient");
+            //_icClient = clientFactory.CreateClient("icClient");
+            //_edfiClientComposite = clientFactory.CreateClient("edfiClientComposite");
+            _config = configuration;
         }
         [FunctionName("Function1")]
         public async Task Run(
@@ -33,7 +37,9 @@ namespace StdBadgeReleaseCycles
 
             //do clients initialization when fn starts
 
-            Updater updater = new Updater(new Athenaeum());
+
+            Updater updater = new Updater(new Athenaeum(new EdfiClientBase(), new EdfiClientCompositeBase(), new ICClientBase()),
+                                            log);
             await updater.UpdateStudents();
         }
     }

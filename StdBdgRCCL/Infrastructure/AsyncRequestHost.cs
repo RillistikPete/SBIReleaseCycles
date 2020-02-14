@@ -1,7 +1,10 @@
 ﻿using Newtonsoft.Json;
+using Polly;
 using StdBdgRCCL.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,7 +24,11 @@ namespace StdBdgRCCL.Infrastructure
                 {
                     List<T> jsonResponse = new List<T>();
                     JsonConvert.PopulateObject(response.Content.ReadAsStringAsync().Result, jsonResponse);
-                    var repoResponse = new HttpResponse<List<T>> { IsSuccessStatusCode = true, Content = jsonResponse };
+                    //with constructor and inheritance
+                    //var repoResponse = new HttpResponse<List<T>>(true, response.Content.ReadAsStringAsync().Result, jsonResponse );
+                    //without:
+                    var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
+
                     return repoResponse;
                 }
                 else
@@ -32,16 +39,17 @@ namespace StdBdgRCCL.Infrastructure
                                $"{responseContent}");
 
                     List<T> jsonResponse = new List<T>();
-                    var repoResponse = new HttpResponse<List<T>> { IsSuccessStatusCode = false, Content = jsonResponse };
+                    //var repoResponse = new HttpResponse<List<T>>(true, response.Content.ReadAsStringAsync().Result, jsonResponse);
+                    var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
                     return repoResponse;
-
                 }
             }
             catch (Exception ex)
             {
                 Logger.Log($"Exception in {exceptionClientName}", $"{ex}");
                 List<T> jsonResponse = new List<T>();
-                var repoResponse = new HttpResponse<List<T>> { IsSuccessStatusCode = false, Content = jsonResponse };
+                //var repoResponse = new HttpResponse<List<T>>(true, null, jsonResponse);
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
                 return repoResponse;
             }
         }
@@ -72,7 +80,7 @@ namespace StdBdgRCCL.Infrastructure
                     {
                         JsonConvert.PopulateObject(jRslt, jsonResponse);
                     }
-                    var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = true, Content = jsonResponse };
+                    var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
 
                     return repoResponse;
 
@@ -85,7 +93,7 @@ namespace StdBdgRCCL.Infrastructure
                                $"{responseContent}");
 
                     T jsonResponse = new T();
-                    var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false, Content = jsonResponse };
+                    var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
 
                     return repoResponse;
                 }
@@ -97,7 +105,7 @@ namespace StdBdgRCCL.Infrastructure
 
 
                 T jsonResponse = new T();
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false, Content = jsonResponse };
+                var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
 
                 return repoResponse;
             }
@@ -111,7 +119,7 @@ namespace StdBdgRCCL.Infrastructure
             {
                 var response = await ExecuteSendRequestAsync(request, client);
 
-                serverResponse.Response = response;
+                serverResponse.HttpRespMsg = response;
                 serverResponse.Message = await response.Content.ReadAsStringAsync();
                 return serverResponse;
             }
@@ -120,7 +128,7 @@ namespace StdBdgRCCL.Infrastructure
                 Logger.Log($"Exception in {exceptionClientName}", $"{ex}");
 
                 HttpResponseMessage response = new HttpResponseMessage { StatusCode = HttpStatusCode.BadRequest };
-                serverResponse.Response = response;
+                serverResponse.HttpRespMsg = response;
                 return serverResponse;
             }
         }
@@ -165,7 +173,7 @@ namespace StdBdgRCCL.Infrastructure
                         }
                     });
 
-                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(GetNewRequestMessage(request)));
+                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(request));
                 return response;
             }
             catch (WebException ex)

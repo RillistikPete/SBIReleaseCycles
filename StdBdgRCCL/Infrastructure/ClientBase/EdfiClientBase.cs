@@ -1,4 +1,6 @@
-﻿using StdBdgRCCL.Models;
+﻿using Newtonsoft.Json;
+using StdBdgRCCL.Interfaces;
+using StdBdgRCCL.Models;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -7,15 +9,18 @@ using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure.ClientBase
 {
-    public class EdfiClientBase
+    public class EdfiClientBase : IEdfiClient
     {
+        private static readonly IHttpClientFactory clientFactory;
+        private readonly HttpClient edfiClient = clientFactory.CreateClient("edfiClient");
+        
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {
             try
             {
                 var fullResourceUri = $"{resourceUri}?offset={offset}&limit={limit}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestForListAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "edfiClient");
             }
             catch (Exception ex)
             {
@@ -45,12 +50,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestForListAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "EdFiClient");
             }
             catch (Exception ex)
             {
                 Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<List<T>> { IsSuccessStatusCode = false };
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -75,12 +80,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestForListAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "EdFiClient");
             }
             catch (Exception ex)
             {
                 Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<List<T>> { IsSuccessStatusCode = false };
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -97,12 +102,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
             }
             catch (Exception ex)
             {
                 Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -114,12 +119,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}{id}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
             }
             catch (Exception ex)
             {
                 Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -131,12 +136,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
             }
             catch (Exception ex)
             {
                 Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                var repoResponse = new HttpResponse<T>{ IsSuccess = false };
 
                 return repoResponse;
             }
@@ -149,9 +154,9 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             do
             {
                 var fetch = await Get<T>(resourceUri, offset, limit);
-                allRecords.AddRange(fetch.Content);
+                allRecords.AddRange(fetch.ResponseContent);
 
-                if (fetch.Content.Count == limit)
+                if (fetch.ResponseContent.Count == limit)
                 {
                     offset += limit;
                 }
@@ -172,7 +177,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
             };
 
-            HttpResponseMessage response = await Clients.EdFiClient.SendAsync(request);
+            HttpResponseMessage response = await edfiClient.SendAsync(request);
             return response;
 
 

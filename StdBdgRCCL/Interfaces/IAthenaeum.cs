@@ -9,13 +9,11 @@ namespace StdBdgRCCL.Interfaces
 {
     public interface IAthenaeum
     {
-
-
         /// <summary>
         /// Gets the IC Student Enrollment resource based on the student id
         /// </summary>
         /// <param name="studentId">Student Number (190xxxxxx)</param>
         /// <returns></returns>
-        Task<HttpResponse<List<ICStudentEnrollment>>> GetICStudentEnrollment(string studentId);
+        Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId);
     }
 }

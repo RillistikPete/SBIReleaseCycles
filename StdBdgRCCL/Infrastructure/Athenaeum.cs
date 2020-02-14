@@ -19,8 +19,9 @@ namespace StdBdgRCCL.Infrastructure
         }
 
         //Implement methods from IAthenaeum
-        Task<HttpResponse<List<ICStudentEnrollment>>> GetICStudentEnrollment(string studentId)
+        public async Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId)
         {
+            return await _icClient.GetSingleByExample<ICStudentEnrollment>($"students?sysfilter=equal(studentNumber: \"{studentId}\") ", null);
         }
     }
 }
