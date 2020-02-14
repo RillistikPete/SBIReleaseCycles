@@ -1,9 +1,11 @@
 ﻿using Newtonsoft.Json;
+using StdBdgRCCL.Infrastructure.Setup;
 using StdBdgRCCL.Interfaces;
 using StdBdgRCCL.Models;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,7 +14,8 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
     public class EdfiClientBase : IEdfiClient
     {
         private static readonly IHttpClientFactory clientFactory;
-        private readonly HttpClient edfiClient = clientFactory.CreateClient("edfiClient");
+        public static HttpClient edfiClient = clientFactory.CreateClient("edfiClient");
+
         
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {
@@ -93,6 +96,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
 
         public async Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new()
         {
+            edfiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", SetClients._edfiToken);
             try
             {
                 var fullResourceUri = $"{resourceUri}";

@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure
 {
-    class AsyncRequestHost
+    public class AsyncRequestHost
     {
         public static async Task<HttpResponse<List<T>>> SendRequestForListAsync<T>(HttpRequestMessage request, HttpClient client, string exceptionClientName)
         {

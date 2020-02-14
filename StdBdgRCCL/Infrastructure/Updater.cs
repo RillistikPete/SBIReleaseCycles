@@ -13,10 +13,10 @@ namespace StdBdgRCCL.Infrastructure
     {
         private readonly IAthenaeum _athen;
         private readonly ILogger _logger;
-        private readonly HttpClient _edfiClient;
-        private readonly HttpClient _edfiClientComposite;
-        private readonly HttpClient _icClient;
-        private readonly IHttpClientFactory httpClientFactory;
+        //private readonly HttpClient _edfiClient;
+        //private readonly HttpClient _edfiClientComposite;
+        //private readonly HttpClient _icClient;
+        //private readonly IHttpClientFactory httpClientFactory;
 
 
         public Updater(IAthenaeum athenaeum, ILogger logger)
