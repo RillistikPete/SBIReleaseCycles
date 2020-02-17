@@ -4,6 +4,7 @@ using StdBdgRCCL.Models;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,9 +12,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
 {
     public class EdfiClientCompositeBase : IEdfiClient
     {
-        private static readonly IHttpClientFactory clientFactory;
-        private readonly HttpClient edfiClientComp = clientFactory.CreateClient("edfiClientComposite");
         private const string _clientName = "EdFiCompositeClient";
+        public static HttpClient edfiClientComp;
+        public EdfiClientCompositeBase(HttpClient client)
+        {
+            edfiClientComp = client;
+        }
 
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {

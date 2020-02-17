@@ -13,25 +13,18 @@ namespace StdBdgRCCL.Infrastructure
     {
         private readonly IAthenaeum _athen;
         private readonly ILogger _logger;
-        //private readonly HttpClient _edfiClient;
-        //private readonly HttpClient _edfiClientComposite;
-        //private readonly HttpClient _icClient;
-        //private readonly IHttpClientFactory httpClientFactory;
-
+        public enum TypeOfSync { AllEnrStudents, SingleEnrStudent, SchoolAssociations, SpecialConditn }
 
         public Updater(IAthenaeum athenaeum, ILogger logger)
         {
             _athen = athenaeum;
             _logger = logger;
-            //_edfiClient = httpClientFactory.CreateClient("edfiClient");
-            //_icClient = httpClientFactory.CreateClient("icClient");
-            //_edfiClientComposite = httpClientFactory.CreateClient("edfiClientComposite");
         }
 
         public async Task UpdateStudents()
         {
-            //_logger.LogInformation("Checking for updates to the ODS");
-            await UpdateStudentsFromIC();
+            _logger.LogInformation("Checking for updates in IC");
+            await UpdateStudentsFromIC(TypeOfSync.SingleEnrStudent);
         }
     }
 }

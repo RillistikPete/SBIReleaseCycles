@@ -1,22 +1,639 @@
-﻿using StdBdgRCCL.Models;
+﻿using Microsoft.Extensions.Logging;
+using StdBdgRCCL.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure
 {
     public partial class Updater
     {
+        private static DateTime today = DateTime.Today;
+        private static Tuple<string, string> quarter = Helpers.StringExt.CalculateQuarter(today);
+        private static string date = DateTime.Now.ToShortDateString();
+        private static DateTime dateOnly = Convert.ToDateTime(date);
+
         public async Task RunEdfiOdsSync(ICStudentEnrollment icStudentEnrollment)
         {
+            string icStdNumber = icStudentEnrollment.StudentNumber.ToString();
+            string icPersonId = icStudentEnrollment.PersonId.ToString();
+            HttpResponse<EdfiEnrollmentStudent> edfiEnrollmentStudentResponse = await _athen.GetEdFiEnrollmentStudentById(icStudentEnrollment.StudentNumber.ToString(), null);
+            if (!edfiEnrollmentStudentResponse.IsSuccessStatusCode)
+            {
+                Logger.Log($"Failed getting EdFi Enrollment Student { icStudentEnrollment.StudentNumber }");
+                _logger.LogInformation($"Failed getting EdFi Enrollment Student { icStudentEnrollment.StudentNumber }");
+                return;
+            }
+            EdfiEnrollmentStudent edfiEnrollmentStudent = edfiEnrollmentStudentResponse.ResponseContent;
+            var edfiStudUniqueId = edfiEnrollmentStudent.StudentUniqueId;
+            var edfiStudentId = edfiEnrollmentStudent.Id;
+            //-----------------------------------------------------------------------------------------
 
+            //Get StudentSchoolAssociations for enrollment/schools schoolId
+            IDictionary<string, string> stdAssociationsRequestProperties = new Dictionary<string, string>()
+            {
+                { "studentUniqueId", edfiStudUniqueId }
+            };
+            HttpResponse<List<StudentSchoolAssociation>> edfiSSAResponse = await _athen.GetStudentSchoolAssociationsByStudentUniqueId(edfiStudUniqueId, stdAssociationsRequestProperties);
+            if (!edfiSSAResponse.IsSuccessStatusCode)
+            {
+                _logger.LogInformation($"Failed getting V3StudentSchoolAssociation for student { edfiStudUniqueId }");
+                Logger.Log("Failed getting V3StudentSchoolAssociation for student", edfiStudUniqueId);
+                return;
+            }
+            List<StudentSchoolAssociation> listOfEdfiStudentSchoolAssociations = edfiSSAResponse.ResponseContent;
+            EdfiEnrollmentSchool activeEdfiEnrollmentSchool = new EdfiEnrollmentSchool();
+            List<StudentSchoolAssociation> activeSSAList = new List<StudentSchoolAssociation>();
+            List<StudentSchoolAssociation> ssaWithdrawals = new List<StudentSchoolAssociation>();
+            StudentSchoolAssociation activeSSA = new StudentSchoolAssociation();
+            StudentSchoolAssociation ssaWithdrawal = new StudentSchoolAssociation();
+            foreach (var ssa in listOfEdfiStudentSchoolAssociations)
+            {
+                if (string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { activeSSAList.Add(ssa); }
+                else if (!string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { ssaWithdrawals.Add(ssa); }
+            }
+
+            if (activeSSAList.Count > 0)
+            {
+                activeSSA = activeSSAList[0];
+                if (activeSSAList.Count > 1)
+                {
+                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing latest date");
+                    List<DateTime> dList = new List<DateTime>();
+                    foreach (var date in activeSSAList)
+                    {
+                        var enDateTime = DateTime.Parse(date.EntryDate);
+                        dList.Add(enDateTime);
+                    }
+                    string dT = dList.Max().ToString("yyyy-MM-dd");
+                    activeSSA = activeSSAList.Where(x => x.EntryDate == dT).FirstOrDefault();
+                }
+            }
+            if (ssaWithdrawals.Count > 0)
+            {
+                ssaWithdrawal = ssaWithdrawals[0];
+                if (ssaWithdrawals.Count > 1)
+                {
+                    _logger.LogInformation($"Multiple withdrawals for student {edfiStudUniqueId} - choosing latest date");
+                    List<DateTime> dList = new List<DateTime>();
+                    foreach (var date in ssaWithdrawals)
+                    {
+                        var wdDateTime = DateTime.Parse(date.ExitWithdrawDate);
+                        dList.Add(wdDateTime);
+                    }
+                    string dT = dList.Max().ToString("yyyy-MM-dd");
+                    ssaWithdrawal = ssaWithdrawals.Where(x => x.ExitWithdrawDate == dT).FirstOrDefault();
+                }
+            }
+            // Set edfiSSA to active School Association or SSA with latest withdrawal date
+            var edfiSSA = activeSSA;
+
+            if (activeSSAList.Count == 0 || activeSSA == null)
+            {
+                _logger.LogInformation($"No active enrollments for studentUniqueId {edfiStudUniqueId}");
+                activeEdfiEnrollmentSchool = null;
+                if (ssaWithdrawal != null)
+                {
+                    edfiSSA = ssaWithdrawal;
+                }
+            }
+
+            //ServType
+            string servType = "";
+            if (activeSSA != null)
+            {
+                if (edfiSSA.PrimarySchool == true) { servType = "P"; }
+                else { servType = "S"; }
+            }
+
+            //Get grade level
+            string gradeLevel = "";
+            string edfiGradeLevel = "";
+            if (!string.IsNullOrEmpty(edfiSSA.EntryGradeLevelDescriptor) || !string.IsNullOrWhiteSpace(edfiSSA.EntryGradeLevelDescriptor))
+            {
+                gradeLevel = edfiSSA.EntryGradeLevelDescriptor.Substring(37);
+                edfiGradeLevel = Helpers.EdFiGradeConverter.ConvertGrade(gradeLevel);
+            }
+            if (edfiGradeLevel == "Grade Conversion Failed")
+            {
+                _logger.LogInformation($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
+                Logger.Log($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
+                return;
+            }
+
+            //Get enrollment/schools > IDCodes for BadgeStudent SchoolCode
+            string enrollmentSchoolIDCode = "";
+            string calendarYr = "";
+            if (activeEdfiEnrollmentSchool != null)
+            {
+                HttpResponse<EdfiEnrollmentSchool> edfiV3EnrollmentSchoolResponse = await _athen.GetEdFiEnrollmentSchoolById(edfiSSA.SchoolReference.SchoolId);
+                if (!edfiV3EnrollmentSchoolResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation { edfiSSA.SchoolReference.SchoolId }");
+                    Logger.Log("Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation", edfiSSA.SchoolReference.SchoolId.ToString());
+                    return;
+                }
+                activeEdfiEnrollmentSchool = edfiV3EnrollmentSchoolResponse.ResponseContent;
+                if (activeEdfiEnrollmentSchool.IdentificationCodes.Count > 0)
+                {
+                    if (activeEdfiEnrollmentSchool.IdentificationCodes.Exists(c => c.EducationOrganizationIdentificationSystemDescriptor.Equals("uri://ed-fi.org/EducationOrganizationIdentificationSystemDescriptor#LEA")))
+                    {
+                        enrollmentSchoolIDCode = activeEdfiEnrollmentSchool.IdentificationCodes.Find(c =>
+                        c.EducationOrganizationIdentificationSystemDescriptor.Equals("uri://ed-fi.org/EducationOrganizationIdentificationSystemDescriptor#LEA")).IDCode;
+                    }
+                    else
+                    {
+                        enrollmentSchoolIDCode = null;
+                        _logger.LogInformation($"No LEA ID Code for enrollment school <{activeEdfiEnrollmentSchool.NameOfInstitution}> - studentId {edfiStudUniqueId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"No identification codes in EdFiEnrollmentSchool { edfiStudUniqueId }");
+                    Logger.Log("No identification codes in EdFiEnrollmentSchool", edfiStudUniqueId);
+                    return;
+                }
+                //-----------------------------------------------------------------------------------------
+                //-----------------------------------------------------------------------------------------
+                //Calendar year
+                //Check quarter for correct year
+                HttpResponse<Models.Calendar> calendar = new HttpResponse<Models.Calendar>();
+                calendar = await _athen.GetCalendarBySchoolId(edfiSSA.SchoolReference.SchoolId, null);
+                if (!calendar.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    Logger.Log($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                }
+                if (calendar.Content != null)
+                {
+                    if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
+                    {
+                        DateTime nYr = DateTime.Now.AddYears(1);
+                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                    }
+                    else if (quarter.Item1 == "Q3" || quarter.Item1 == "Q4")
+                    {
+                        DateTime lYr = DateTime.Now.AddYears(-1);
+                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                    }
+                    else if (quarter.Item1 == "Outside of school year") { _logger.LogInformation($"Quarter invlaid - Outside of school year"); }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    //Logger.Log($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                }
+            }
+
+            //-----------------------------------------------------------------------------------------
+            var badgeStudentResponse = await GetBadgeStudentAsync(edfiStudUniqueId);
+            if (!badgeStudentResponse.IsSuccessStatusCode)
+            {
+                _logger.LogInformation($"Failure in badge student request {edfiStudUniqueId}");
+                //Logger.Log("Failure in badge student request.", edfiStudUniqueId);
+                return;
+            }
+            BadgeStudent badgeStudent = badgeStudentResponse.ResponseContent;
+
+            //-----------------------------------------------------------------------------------------
+            //-----------------------------------------------------------------------------------------
+            //Use edfiSSA (active) to find Location by schoolId (Phase 2 Implementation Jan2020)
+            string homeroom = "";
+            string homeroomCode = "";
+            Location locatn;
+            bool cbtpExists = false;
+            if (activeEdfiEnrollmentSchool != null)
+            {
+                HttpResponse<List<Location>> locations = await _athen.GetLocationsBySchoolId(edfiSSA.SchoolReference.SchoolId, null);
+                if (!locations.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
+                    //Logger.Log($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
+                }
+                if (locations.ResponseContent != null)
+                {
+                    cbtpExists = locations.ResponseContent.Exists(x => x.ClassroomIdentificationCode == "CBTP");
+                    locatn = locations.ResponseContent.Where(x => x.ClassroomIdentificationCode == "CBTP").FirstOrDefault();
+                    if (cbtpExists && locatn != null)
+                    {
+                        homeroom = locatn.ClassroomIdentificationCode;
+                    }
+                    else
+                    {
+                        // Do nothing
+                        //_logger.LogInformation($"No classroom of 'CBTP' for school {edfiSSA.SchoolReference.SchoolId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
+                    Logger.Log($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
+                }
+                //====================================================================================================
+                //Check course 'Homeroom 9-12 SX' exists in studentSchedules
+                List<StudentSchedule> studentSchedule = new List<StudentSchedule>();
+                var studentScheduleResponse = await _athen.GetStudentScheduleById(edfiStudUniqueId);
+                if (!studentScheduleResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
+                    Logger.Log($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
+                    return;
+                }
+                if (studentScheduleResponse.ResponseContent.Count == 0)
+                {
+                    _logger.LogInformation($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
+                    Logger.Log($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
+                    //return;
+                }
+                if (studentScheduleResponse.ResponseContent != null)
+                {
+                    studentSchedule = studentScheduleResponse.ResponseContent;
+                }
+                else
+                {
+                    _logger.LogInformation($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
+                    Logger.Log($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
+                }
+                //-----------------------------------------------------------------------------------------
+                if (studentSchedule != null)
+                {
+                    Boolean hr9thru12Exists = studentSchedule.Exists(x => x.Course == ("Homeroom 9-12 " + quarter.Item2));
+                    if (!string.IsNullOrWhiteSpace(homeroom) && !string.IsNullOrEmpty(homeroom) && hr9thru12Exists)
+                    {
+                        homeroomCode = homeroom;
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Null homeroomSection for student {edfiStudUniqueId}");
+                        Logger.Log($"Null homeroomSection for student {edfiStudUniqueId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null studentSchedule for student {edfiStudUniqueId}");
+                    Logger.Log($"Null studentSchedule for student {edfiStudUniqueId}");
+                }
+            }
+
+            await BadgeCRUD(icStudentEnrollment, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
         }
 
-        public async Task UpdateStudentsFromIC()
+        public async Task<HttpResponse<BadgeStudent>> GetBadgeStudentAsync(string studentId)
+        {
+            var badgeStudentResponse = await _athen.GetBadgeSystemStudentById(studentId);
+            if (!badgeStudentResponse.IsSuccessStatusCode)
+            {
+                return new HttpResponse<BadgeStudent> { IsSuccess = false };
+            }
+            if (badgeStudentResponse.ResponseContent.Count == 0)
+            {
+                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = null };
+            }
+            else
+            {
+                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = badgeStudentResponse.ResponseContent[0] };
+            }
+        }
+
+        public async Task BadgeCRUD(ICStudentEnrollment icStudentEnrollment, BadgeStudent badgeStudent, StudentSchoolAssociation edfiSSA, string edfiStudUniqueId, EdfiEnrollmentSchool activeEdFiEnrollmentSchool,
+                                    string enrollmentSchoolIDCode, EdfiEnrollmentStudent edfiV3EnrollmentStudent, string edfiGradeLevel, string homeroomCode, string servType, string calendar)
+        {
+            //Try update
+            if (badgeStudent != null && activeEdFiEnrollmentSchool != null)
+            {
+                long badgeChecksum = Helpers.HashConverter.Hash(badgeStudent.LastName?.ToUpper() +
+                                      badgeStudent.FirstName?.ToUpper() +
+                                      badgeStudent.MiddleName?.ToUpper() +
+                                      badgeStudent.BirthDate?.ToString() +
+                                      badgeStudent.SchoolNumber +
+                                      badgeStudent.SchoolName?.ToUpper() +
+                                      badgeStudent.Grade +
+                                      badgeStudent.Homeroom?.ToUpper() +
+                                      badgeStudent.ServType?.ToUpper() +
+                                      badgeStudent.Calendar?.ToUpper() +
+                                      badgeStudent.PrevMifareCardNum +
+                                      badgeStudent.PersonId);
+
+                long edfiEnrollmentChecksum = Helpers.HashConverter.Hash(edfiV3EnrollmentStudent.LastSurname.ToUpper() +
+                                                               edfiV3EnrollmentStudent.FirstName.ToUpper() +
+                                                               edfiV3EnrollmentStudent.MiddleName.ToUpper() +
+                                                               edfiV3EnrollmentStudent.BirthDate.ToString() +
+                                                               enrollmentSchoolIDCode +
+                                                               activeEdFiEnrollmentSchool.NameOfInstitution.ToUpper() +
+                                                               edfiGradeLevel +
+                                                               homeroomCode.ToUpper() +
+                                                               servType.ToUpper() +
+                                                               calendar.ToUpper() +
+                                                               badgeStudent.MifareCardNumber +
+                                                               icStudentEnrollment.PersonId);
+                //Update record ==============================================================
+                if (badgeChecksum != edfiEnrollmentChecksum)
+                {
+                    //-----------
+                    string stdSchoolNum = badgeStudent.SchoolNumber;
+                    string stdSchoolName = badgeStudent.SchoolName;
+                    string prevMifareCard = badgeStudent.PrevMifareCardNum;
+                    //-----------
+                    badgeStudent.LastName = edfiV3EnrollmentStudent.LastSurname;
+                    badgeStudent.FirstName = edfiV3EnrollmentStudent.FirstName;
+                    badgeStudent.MiddleName = edfiV3EnrollmentStudent.MiddleName;
+                    badgeStudent.BirthDate = edfiV3EnrollmentStudent.BirthDate;
+                    if (edfiSSA.ExitWithdrawDate != null)
+                    {
+                        badgeStudent.Expiration = Convert.ToDateTime(edfiSSA.ExitWithdrawDate);
+                        badgeStudent.Expiredate = Convert.ToDateTime(edfiSSA.ExitWithdrawDate);
+                    }
+                    badgeStudent.SchoolNumber = enrollmentSchoolIDCode ?? "";
+                    badgeStudent.SchoolName = activeEdFiEnrollmentSchool.NameOfInstitution ?? "";
+                    badgeStudent.Grade = edfiGradeLevel;
+                    badgeStudent.Homeroom = homeroomCode;
+                    if (badgeStudent.Homeroom == "CBTP")
+                    {
+                        _logger.LogInformation($"Setting homeroom to CBTP for student {badgeStudent.StudentId}");
+                        Logger.Log($"Setting homeroom to CBTP for student {badgeStudent.StudentId}");
+                    }
+                    badgeStudent.PersonId = icStudentEnrollment.PersonId.ToString();
+                    badgeStudent.ServType = servType;
+                    badgeStudent.Calendar = calendar;
+                    badgeStudent.LastUpdated = dateOnly;
+                    badgeStudent.LastUpdatedBy = "Ed-fi Dev";
+
+                    //Set badge types
+                    if (badgeStudent.Grade == "P3" || badgeStudent.Grade == "P4" || badgeStudent.Grade == "K") { badgeStudent.BadgeType = "MNPS_Student_Badge_Non_Bus_Pass"; }
+                    else
+                    {
+                        byte grade = Convert.ToByte(badgeStudent.Grade);
+                        if (Enumerable.Range(9, 12).Contains(grade)) { badgeStudent.BadgeType = "MNPS_Student_Badge"; }
+                        else if (Enumerable.Range(1, 8).Contains(grade)) { badgeStudent.BadgeType = "MNPS_Student_Badge_Non_Bus_Pass"; }
+                    }
+
+                    //Set certain fields null when school is changed
+                    string[] exceptSchools = new string[] { "830", "803", "748", "397", "564" };
+                    if ((badgeStudent.SchoolNumber != stdSchoolNum || badgeStudent.SchoolName != stdSchoolName) && !exceptSchools.Any(x => x == badgeStudent.SchoolNumber))
+                    {
+                        badgeStudent.PrintDate = null;
+                        badgeStudent.MifareCardNumber = null;
+                        badgeStudent.MifareBusPassNum = null;
+                        badgeStudent.LastUpdatedBy = "SchoolChange";
+                        badgeStudent.LastUpdated = dateOnly;
+                    }
+
+                    if (badgeStudent.SchoolNumber == "830" || icStudentEnrollment.CalendarName.Contains("Genesis") || icStudentEnrollment.CalendarName.Contains("High Road"))
+                    {
+                        badgeStudent.SchoolName = "Genesis or High Road";
+                        badgeStudent.BadgeType = "MNPS_SPED_BADGE";
+                    }
+
+                    if (prevMifareCard != badgeStudent.MifareCardNumber)
+                    {
+                        badgeStudent.IssueDate = dateOnly;
+                    }
+
+                    if (string.IsNullOrEmpty(badgeStudent.MifareCardNumber) && badgeStudent.Expiration == null)
+                    {
+                        badgeStudent.IssueDate = dateOnly;
+                    }
+
+                    // V6 Docs - disregard for now
+                    //if (badgeStudent.MifareCardNumber == null)
+                    //{
+                    //    //Send record to MTA deactivation list
+                    //}
+
+                    if (badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302 || badgeStudent.Homeroom == "CBTP")
+                    {
+                        badgeStudent.SchoolName = "CBTP";
+                        badgeStudent.BadgeType = "MNPS_SPED_BADGE";
+                    }
+
+                    //========================================================================
+
+                    _logger.LogInformation($"Updating {edfiStudUniqueId}");
+                    var repoResponse = await _athen.UpdateStudentBadge(badgeStudent.StudentId, badgeStudent);
+                    Thread.Sleep(200);
+                    bool updateSuccess = false;
+                    if (repoResponse.HttpRespMsg.IsSuccessStatusCode)
+                    {
+                        Logger.Log($"Successfully updated student badge {badgeStudent.StudentId}");
+                        _logger.LogInformation($"Successfully updated student badge {badgeStudent.StudentId}");
+                        updateSuccess = true;
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Failed updating student badge {badgeStudent.StudentId}");
+                        Logger.Log($"Failed updating student badge {badgeStudent.StudentId}");
+                    }
+
+                    //if (updateSuccess)
+                    //{
+                    //    _logger.LogInformation($"Posting new student-historicals record for {badgeStudent.StudentId}");
+                    //    Thread.Sleep(200);
+                    //    PersonsHistory pHistoryObject = new PersonsHistory();
+
+                    //    pHistoryObject.Bmsid = badgeStudent.StudentId;
+                    //    pHistoryObject.LastName = badgeStudent.LastName;
+                    //    pHistoryObject.FirstName = badgeStudent.FirstName;
+                    //    pHistoryObject.MiddleName = badgeStudent.MiddleName;
+                    //    pHistoryObject.SchoolName = badgeStudent.SchoolName;
+                    //    pHistoryObject.SchoolNumber = badgeStudent.SchoolNumber;
+                    //    pHistoryObject.Grade = badgeStudent.Grade;
+                    //    pHistoryObject.MifareCardNumber = badgeStudent.MifareCardNumber;
+                    //    pHistoryObject.MifareBusPassNum = badgeStudent.MifareBusPassNum;
+                    //    pHistoryObject.MifareApproved = badgeStudent.MifareApproved;
+                    //    pHistoryObject.MifareEligible = badgeStudent.MifareEligible;
+                    //    var x = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss.fff");
+                    //    pHistoryObject.TimeStamp = Convert.ToDateTime(x);
+                    //    pHistoryObject.HashkeyExist = badgeStudent.Hashkey;
+                    //    pHistoryObject.LastUpdatedBy = badgeStudent.LastUpdatedBy;
+                    //    pHistoryObject.PrintDate = badgeStudent.PrintDate;
+                    //    pHistoryObject.IssueDate = badgeStudent.IssueDate != null ? badgeStudent.IssueDate.Value.ToString("yyyy-MM-dd") : DateTime.UtcNow.ToString("yyyy-MM-dd");
+                    //    pHistoryObject.BadgeType = badgeStudent.BadgeType;
+
+                    //    var resp = await _repo.PostPersonsHistoryToStudentHistoricals(pHistoryObject);
+                    //    if (resp.Response.IsSuccessStatusCode)
+                    //    {
+                    //        Logger.Log($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student update");
+                    //        _logger.LogInformation($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for normal badge student update");
+                    //    }
+                    //    else
+                    //    {
+                    //        Logger.Log($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student update");
+                    //        _logger.LogInformation($"Failed to post student-historicals object {pHistoryObject.Bmsid} - normal badge student update. \r\n");
+                    //    }
+                    //}
+                    return;
+                }
+            }
+            //Delete record
+            //No longer delete - Nov 2019 - update expiredate/expiration for badge student
+            else if (badgeStudent != null && activeEdFiEnrollmentSchool == null)
+            {
+                DateTime? withdrawalExpiration = badgeStudent.Expiration;
+                if (edfiSSA.ExitWithdrawDate != null)
+                {
+                    badgeStudent.Expiration = Convert.ToDateTime(edfiSSA.ExitWithdrawDate);
+                    badgeStudent.Expiredate = Convert.ToDateTime(edfiSSA.ExitWithdrawDate);
+                }
+
+                if (withdrawalExpiration != badgeStudent.Expiration)
+                {
+                    badgeStudent.LastUpdated = dateOnly;
+                    badgeStudent.LastUpdatedBy = "ed-fi dev";
+                    _logger.LogInformation($"Updating {edfiStudUniqueId}");
+                    Thread.Sleep(500);
+                    var repoResponse = await _athen.UpdateStudentBadge(badgeStudent.StudentId, badgeStudent);
+                    bool updateSuccess = false;
+                    if (repoResponse.HttpRespMsg.IsSuccessStatusCode)
+                    {
+                        _logger.LogInformation($"Successfully updated {badgeStudent.StudentId} for badge student withdrawal.");
+                        updateSuccess = true;
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Failed updating withdrawal for student {edfiStudUniqueId}");
+                        Logger.Log($"Failed updating withdrawal for student {edfiStudUniqueId}");
+                    }
+                    //if (updateSuccess)
+                    //{
+                    //    //POST to PersonsHistory table
+                    //    var x = DateTime.Now.ToString("yyyy-MM-dd hh:mm:ss.fff");
+                    //    Thread.Sleep(500);
+                    //    _logger.LogInformation($"Posting new student-historicals record {badgeStudent.StudentId} for withdrawal.");
+                    //    PersonsHistory pHistoryObject = new PersonsHistory()
+                    //    {
+                    //        Bmsid = badgeStudent.StudentId,
+                    //        LastName = badgeStudent.LastName,
+                    //        FirstName = badgeStudent.FirstName,
+                    //        MiddleName = badgeStudent.MiddleName,
+                    //        SchoolName = badgeStudent.SchoolName,
+                    //        SchoolNumber = badgeStudent.SchoolNumber,
+                    //        Grade = badgeStudent.Grade,
+                    //        MifareCardNumber = badgeStudent.MifareCardNumber,
+                    //        MifareBusPassNum = badgeStudent.MifareBusPassNum,
+                    //        MifareApproved = badgeStudent.MifareApproved,
+                    //        MifareEligible = badgeStudent.MifareEligible,
+                    //        TimeStamp = DateTime.Parse(x),
+                    //        HashkeyExist = badgeStudent.Hashkey,
+                    //        LastUpdatedBy = badgeStudent.LastUpdatedBy,
+                    //        PrintDate = badgeStudent.PrintDate,
+                    //        IssueDate = badgeStudent.IssueDate != null ? badgeStudent.IssueDate.Value.ToString("yyyy-MM-dd") : DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    //        BadgeType = badgeStudent.BadgeType
+                    //    };
+                    //    var resp = await _repo.PostPersonsHistoryToStudentHistoricals(pHistoryObject);
+                    //    if (resp.Response.IsSuccessStatusCode)
+                    //    {
+                    //        _logger.LogInformation($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
+                    //        Logger.Log($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
+                    //    }
+                    //    else
+                    //    {
+                    //        _logger.LogInformation($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal");
+                    //        Logger.Log($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
+                    //    }
+                    //}
+                }
+                return;
+            }
+            //Create record
+            else if (badgeStudent == null && activeEdFiEnrollmentSchool != null)
+            {
+                _logger.LogInformation($"Creating badge for {edfiStudUniqueId}");
+
+                badgeStudent = new BadgeStudent
+                {
+                    StudentId = edfiStudUniqueId,
+                    LastName = edfiV3EnrollmentStudent.LastSurname,
+                    FirstName = edfiV3EnrollmentStudent.FirstName,
+                    MiddleName = edfiV3EnrollmentStudent.MiddleName,
+                    BirthDate = edfiV3EnrollmentStudent.BirthDate,
+                    SchoolNumber = enrollmentSchoolIDCode,
+                    SchoolName = activeEdFiEnrollmentSchool.NameOfInstitution,
+                    Grade = edfiGradeLevel,
+                    Homeroom = homeroomCode,
+                    ServType = servType,
+                    Calendar = calendar,
+                    LastUpdated = dateOnly,
+                    PersonId = icStudentEnrollment.PersonId.ToString(),
+                };
+
+                //Set badge types
+                if (badgeStudent.Grade == "P3" || badgeStudent.Grade == "P4" || badgeStudent.Grade == "K") { badgeStudent.BadgeType = "MNPS_Student_Badge_Non_Bus_Pass"; }
+                else
+                {
+                    byte grade = Convert.ToByte(badgeStudent.Grade);
+                    if (Enumerable.Range(9, 12).Contains(grade)) { badgeStudent.BadgeType = "MNPS_Student_Badge"; }
+                    else if (Enumerable.Range(1, 8).Contains(grade)) { badgeStudent.BadgeType = "MNPS_Student_Badge_Non_Bus_Pass"; }
+                }
+
+                if (badgeStudent.SchoolNumber == "830" || icStudentEnrollment.CalendarName.Contains("Genesis") || icStudentEnrollment.CalendarName.Contains("High Road"))
+                {
+                    badgeStudent.SchoolName = "Genesis or High Road";
+                }
+
+                // V6 Docs 
+                //if (string.IsNullOrEmpty(badgeStudent.MifareCardNumber) && badgeStudent.Expiration == null)
+                //{
+                //    var date = DateTime.Now.ToShortDateString(); var dateOnly = Convert.ToDateTime(date);
+                //    badgeStudent.IssueDate = dateOnly;
+                //}
+
+                // V6 Docs - disregard for now
+                //if (badgeStudent.MifareCardNumber == null)
+                //{
+                //    //Send record to MTA deactivation list
+                //}
+
+                if (badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302 || badgeStudent.Homeroom == "CBTP")
+                {
+                    badgeStudent.SchoolName = "CBTP";
+                }
+
+                var repoResponse = await _athen.CreateStudentBadge(badgeStudent);
+                if (repoResponse.HttpRespMsg.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Created student badge {badgeStudent.StudentId}");
+                    Logger.Log($"Created student badge {badgeStudent.StudentId}");
+                }
+                else
+                {
+                    Logger.Log($"Failed creating student badge {badgeStudent.StudentId} \r\n",
+                        $"Details --------- \r\n" +
+                        $"Headers: \r\n" +
+                        $"{repoResponse.HttpRespMsg.Headers} \r\n" +
+                        $"Request Message: \r\n" +
+                        $"{repoResponse.HttpRespMsg.RequestMessage} r\n" +
+                        $"Reason: \r\n" +
+                        $"{repoResponse.Message}");
+
+                    //Logger.TrackTelemetryEvent("Request Failure", new Dictionary<string, string> {
+                    //{ "Description", $"Failed creating student badge {badgeStudent.StudentId}" },
+                    //{ "Headers", repoResponse.Response.Headers.ToString() },
+                    //{ "Request Message", repoResponse.Response.RequestMessage.ToString() },
+                    //{ "Reason", repoResponse.Message }
+                    //});
+                    Logger.Log($"Failed creating student badge {badgeStudent.StudentId}", edfiStudUniqueId);
+                }
+                return;
+            }
+            //No records
+            else if (badgeStudent == null && activeEdFiEnrollmentSchool == null)
+            {
+                _logger.LogInformation($"Null badge student {edfiStudUniqueId} and no active ed-fi enrollments.");
+                return;
+            }
+            //-----------------------------------------------------------------------------------------
+            _logger.LogInformation($"{edfiStudUniqueId} up to date");
+        }
+
+
+
+        public async Task UpdateStudentsFromIC(TypeOfSync typeOfSync)
         {
             string today = DateTime.Now.ToShortDateString();
-            string studUniqId = "190007507";
+            string studUniqId = "190313633";
             int offset = 0;
             const int limit = 100;
             bool isFinished = false;
@@ -27,20 +644,24 @@ namespace StdBdgRCCL.Infrastructure
 
             do
             {
-                //GET SINGLE IC STUDENT ENR
-                HttpResponse<ICStudentEnrollment> icStdEnrollmentResult = new HttpResponse<ICStudentEnrollment>();
-                //_logger.LogInformation($"Getting next batch of ed-fi enrollments {today}, offset {offset}");
-                icStdEnrollmentResult = await _athen.GetICStudentEnrollmentByStudentNumber(studUniqId);
-                if (!icStdEnrollmentResult.IsSuccessStatusCode)
+
+                if (typeOfSync == TypeOfSync.SingleEnrStudent)
                 {
-                    //_logger.LogInformation($"Failed getting next batch of EdFi Student School Associations on offset {offset}");
-                    Logger.Log($"Failed getting IC Enrollment Student {studUniqId} on offset {offset}");
-                    break;
+                    //GET SINGLE IC STUDENT ENR
+                    HttpResponse<ICStudentEnrollment> icStdEnrollmentResult = new HttpResponse<ICStudentEnrollment>();
+                    //_logger.LogInformation($"Getting next batch of ed-fi enrollments {today}, offset {offset}");
+                    icStdEnrollmentResult = await _athen.GetICStudentEnrollmentByStudentNumber(studUniqId);
+                    if (!icStdEnrollmentResult.IsSuccessStatusCode)
+                    {
+                        //_logger.LogInformation($"Failed getting next batch of EdFi Student School Associations on offset {offset}");
+                        Logger.Log($"Failed getting IC Enrollment Student {studUniqId} on offset {offset}");
+                        break;
+                    }
+                    ICStudentEnrollment icStdEnrmt = icStdEnrollmentResult.ResponseContent;
+                    var result = RunEdfiOdsSync(icStdEnrmt);
+                    tasks.Add(result);
+                    isFinished = true; 
                 }
-                ICStudentEnrollment icStdEnrmt = icStdEnrollmentResult.ResponseContent;
-                var result = RunEdfiOdsSync(icStdEnrmt);
-                tasks.Add(result);
-                isFinished = true;
 
                 //Await all tasks
                 try

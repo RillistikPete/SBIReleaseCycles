@@ -11,7 +11,7 @@ namespace StdBdgRCCL.Models
         public long PersonId { get; set; }
 
         [JsonProperty("stateStudentNumber")]
-        public long StateStudentNumber { get; set; }
+        public long? StateStudentNumber { get; set; }
 
         [JsonProperty("studentNumber")]
         public long StudentNumber { get; set; }
@@ -26,13 +26,13 @@ namespace StdBdgRCCL.Models
         public DateTimeOffset EntryDate { get; set; }
 
         [JsonProperty("exitDate")]
-        public object ExitDate { get; set; }
+        public DateTimeOffset? ExitDate { get; set; }
 
         [JsonProperty("enrollmentType")]
         public string EnrollmentType { get; set; }
 
         [JsonProperty("grade")]
-        public long Grade { get; set; }
+        public string Grade { get; set; }
 
         [JsonProperty("schoolID")]
         public long SchoolId { get; set; }

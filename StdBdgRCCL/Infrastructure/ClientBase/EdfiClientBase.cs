@@ -13,17 +13,19 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
 {
     public class EdfiClientBase : IEdfiClient
     {
-        private static readonly IHttpClientFactory clientFactory;
-        public static HttpClient edfiClient = clientFactory.CreateClient("edfiClient");
-
-        
+        private const string _clientName = "EdFiClient";
+        public static HttpClient edfiClient;
+        public EdfiClientBase(HttpClient client)
+        {
+            edfiClient = client;
+        }
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {
             try
             {
                 var fullResourceUri = $"{resourceUri}?offset={offset}&limit={limit}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "edfiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {
@@ -53,7 +55,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {
@@ -83,7 +85,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {
@@ -96,7 +98,6 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
 
         public async Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new()
         {
-            edfiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", SetClients._edfiToken);
             try
             {
                 var fullResourceUri = $"{resourceUri}";
@@ -106,7 +107,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {
@@ -123,7 +124,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}{id}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {
@@ -140,7 +141,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
             catch (Exception ex)
             {

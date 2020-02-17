@@ -18,8 +18,7 @@ namespace StdBdgRCCL.Infrastructure
             try
             {
                 var response = await ExecuteSendRequestAsync(request, client);
-
-
+                
                 if (response.IsSuccessStatusCode)
                 {
                     List<T> jsonResponse = new List<T>();
@@ -28,7 +27,6 @@ namespace StdBdgRCCL.Infrastructure
                     //var repoResponse = new HttpResponse<List<T>>(true, response.Content.ReadAsStringAsync().Result, jsonResponse );
                     //without:
                     var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
-
                     return repoResponse;
                 }
                 else
@@ -81,9 +79,7 @@ namespace StdBdgRCCL.Infrastructure
                         JsonConvert.PopulateObject(jRslt, jsonResponse);
                     }
                     var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
-
                     return repoResponse;
-
                 }
                 else
                 {
@@ -173,13 +169,29 @@ namespace StdBdgRCCL.Infrastructure
                         }
                     });
 
-                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(request));
+                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(GetNewRequestMessage(request)));
                 return response;
             }
             catch (WebException ex)
             {
                 throw ex;
             }
+        }
+
+        public static HttpRequestMessage GetNewRequestMessage(HttpRequestMessage request)
+        {
+            HttpRequestMessage newRequest = new HttpRequestMessage(request.Method, request.RequestUri);
+
+            if (request.Content != null)
+            {
+                newRequest.Content = request.Content;
+            }
+            if (request.Properties != null)
+            {
+                foreach (var prop in request.Properties)
+                    newRequest.Properties.Add(prop.Key, prop.Value);
+            }
+            return newRequest;
         }
     }
 }

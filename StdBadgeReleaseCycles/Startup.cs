@@ -13,6 +13,8 @@ using StdBdgRCCL.Infrastructure.Setup;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using StdBdgRCCL.Infrastructure.ClientBase;
+using System.Net.Http;
+using Newtonsoft.Json;
 
 [assembly: FunctionsStartup(typeof(StdBadgeReleaseCycles.Startup))]
 
@@ -21,31 +23,38 @@ namespace StdBadgeReleaseCycles
     public class Startup : FunctionsStartup
     {
         private IConfiguration _config;
+        private static readonly string edfiApiBaseUri = Environment.GetEnvironmentVariable("EdFiApiBaseUri");
+        private static readonly string edfiOAuthUri = Environment.GetEnvironmentVariable("EdFiOAuthUri");
+        private static readonly string apiBaseUri = Environment.GetEnvironmentVariable("ApiBaseUri");
 
         public override void Configure(IFunctionsHostBuilder builder)
         {
-            builder.Services.AddHttpClient<EdfiClientBase>("edfiClient", c =>
+            builder.Services.AddHttpClient("edfiClient", c =>
             {
                 c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.
             });
 
-            builder.Services.AddHttpClient<EdfiClientCompositeBase>("edfiClientComposite", c =>
+            builder.Services.AddHttpClient("edfiClientComposite", c =>
             {
-                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiV3CompositeBaseUri"));
+                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiCompositeBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _edfiToken);
             });
 
-            builder.Services.AddHttpClient<ICClientBase>("icClient", c =>
+            builder.Services.AddHttpClient("icClient", c =>
             {
                 c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("ApiBaseUri") + Environment.GetEnvironmentVariable("ICBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _icToken);
             });
-            
-            builder.Services.AddSingleton((s) => { return new Athenaeum(new EdfiClientBase(), new EdfiClientCompositeBase(), new ICClientBase()); });
+
+            builder.Services.AddHttpClient("badgeClient", c =>
+            {
+                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("ApiBaseUri") + Environment.GetEnvironmentVariable("BadgeBaseUri"));
+                c.DefaultRequestHeaders.Add("Accept", "application/json");
+            });
+
+            builder.Services.AddSingleton((s) => { return new Athenaeum(new EdfiClientBase(Authorization.edfiClient), new EdfiClientCompositeBase(Authorization.edfiClientComp),
+                                                    new ICClientBase(Authorization.icClient), new BadgeClientBase(Authorization.badgeClient)); });
             builder.Services.AddScoped<IUpdater, Updater>();
             builder.Services.AddScoped<IAthenaeum, Athenaeum>();
             builder.Services.AddScoped<IEdfiClient, EdfiClientBase>();
