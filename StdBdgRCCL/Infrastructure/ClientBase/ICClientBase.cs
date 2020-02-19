@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using StdBdgRCCL.Interfaces;
 using StdBdgRCCL.Models;
+using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -48,7 +49,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log($"Get request failed in {_clientName} Client", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in IC Client Base at GetByExample<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<List<T>> { IsSuccess= false };
 
                 return repoResponse;
@@ -70,7 +71,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in IC Client Base at GetSingleByExample<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;

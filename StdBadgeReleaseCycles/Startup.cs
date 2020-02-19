@@ -1,20 +1,12 @@
-﻿using Microsoft.Azure.WebJobs.Hosting;
-using Microsoft.Azure.WebJobs;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Azure.Functions.Extensions.DependencyInjection;
-using StdBdgRCCL.Infrastructure;
-using StdBdgRCCL.Interfaces;
-using System.Net.Http.Headers;
-using System.Threading.Tasks;
-using StdBdgRCCL.Infrastructure.Setup;
+﻿using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using StdBdgRCCL.Infrastructure;
 using StdBdgRCCL.Infrastructure.ClientBase;
-using System.Net.Http;
-using Newtonsoft.Json;
+using StdBdgRCCL.Infrastructure.Setup;
+using StdBdgRCCL.Interfaces;
+using System;
 
 [assembly: FunctionsStartup(typeof(StdBadgeReleaseCycles.Startup))]
 
@@ -53,8 +45,11 @@ namespace StdBadgeReleaseCycles
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
             });
 
-            builder.Services.AddSingleton((s) => { return new Athenaeum(new EdfiClientBase(Authorization.edfiClient), new EdfiClientCompositeBase(Authorization.edfiClientComp),
-                                                    new ICClientBase(Authorization.icClient), new BadgeClientBase(Authorization.badgeClient)); });
+            builder.Services.AddSingleton((s) =>
+            {
+                return new Athenaeum(new EdfiClientBase(Authorization.edfiClient), new EdfiClientCompositeBase(Authorization.edfiClientComp),
+                 new ICClientBase(Authorization.icClient), new BadgeClientBase(Authorization.badgeClient));
+            });
             builder.Services.AddScoped<IUpdater, Updater>();
             builder.Services.AddScoped<IAthenaeum, Athenaeum>();
             builder.Services.AddScoped<IEdfiClient, EdfiClientBase>();

@@ -666,7 +666,7 @@ namespace StdBdgRCCL.Infrastructure
 
                     if (badgeStudent.SchoolNumber == "830" || icStudentEnrollment.CalendarName.Contains("Genesis") || icStudentEnrollment.CalendarName.Contains("High Road"))
                     {
-                        badgeStudent.SchoolName = "Genesis or High Road";
+                        badgeStudent.SchoolName = activeEdFiEnrollmentSchool.NameOfInstitution;
                         badgeStudent.BadgeType = "MNPS_SPED_BADGE";
                     }
 
@@ -686,9 +686,9 @@ namespace StdBdgRCCL.Infrastructure
                     //    //Send record to MTA deactivation list
                     //}
 
-                    if (badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302 || badgeStudent.Homeroom == "CBTP")
+                    if ((badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302) && badgeStudent.Homeroom == "CBTP")
                     {
-                        badgeStudent.SchoolName = "CBTP";
+                        //badgeStudent.SchoolName = "CBTP";
                         badgeStudent.BadgeType = "MNPS_SPED_BADGE";
                     }
 
@@ -853,7 +853,8 @@ namespace StdBdgRCCL.Infrastructure
 
                 if (badgeStudent.SchoolNumber == "830" || icStudentEnrollment.CalendarName.Contains("Genesis") || icStudentEnrollment.CalendarName.Contains("High Road"))
                 {
-                    badgeStudent.SchoolName = "Genesis or High Road";
+                    badgeStudent.SchoolName = activeEdFiEnrollmentSchool.NameOfInstitution;
+                    badgeStudent.BadgeType = "MNPS_SPED_BADGE";
                 }
 
                 // V6 Docs 
@@ -869,9 +870,10 @@ namespace StdBdgRCCL.Infrastructure
                 //    //Send record to MTA deactivation list
                 //}
 
-                if (badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302 || badgeStudent.Homeroom == "CBTP")
+                if ((badgeStudent.SchoolName == "Harris-Hillman Special Education" || edfiSSA.SchoolReference.SchoolId == 1900302) && badgeStudent.Homeroom == "CBTP")
                 {
-                    badgeStudent.SchoolName = "CBTP";
+                    //badgeStudent.SchoolName = "CBTP";
+                    badgeStudent.BadgeType = "MNPS_SPED_BADGE";
                 }
 
                 var repoResponse = await _athen.CreateStudentBadge(badgeStudent);
@@ -909,7 +911,7 @@ namespace StdBdgRCCL.Infrastructure
         public async Task UpdateStudentsFromIC(TypeOfSync typeOfSync)
         {
             string today = DateTime.Now.ToShortDateString();
-            string studUniqId = "190313633";
+            string studUniqId = "190313636";
             int pagesize = 1000;
             int offset = 0;
             const int limit = 100;

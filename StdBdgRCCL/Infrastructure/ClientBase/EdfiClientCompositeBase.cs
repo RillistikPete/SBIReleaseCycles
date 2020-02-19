@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using StdBdgRCCL.Interfaces;
 using StdBdgRCCL.Models;
+using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -29,7 +30,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at Get<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
@@ -59,7 +60,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetByExample<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
@@ -89,7 +90,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetByExampleLowerLimit<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
@@ -111,7 +112,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Client Composite \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetSingleByExample<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
@@ -128,7 +129,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetById<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
@@ -145,7 +146,7 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFiComposite  Client \r\n", $"{ex}");
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetSingle<T>, {_clientName} \r\n {ex.Message}");
                 var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;

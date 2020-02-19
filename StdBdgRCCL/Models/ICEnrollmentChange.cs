@@ -23,13 +23,13 @@ namespace StdBdgRCCL.Models
         public string ServiceType { get; set; }
 
         [JsonProperty("entryDate")]
-        public DateTimeOffset EntryDate { get; set; }
+        public DateTime? EntryDate { get; set; }
 
         [JsonProperty("modifiedDate")]
-        public DateTimeOffset ModifiedDate { get; set; }
+        public DateTime? ModifiedDate { get; set; }
 
         [JsonProperty("exitDate")]
-        public DateTimeOffset ExitDate { get; set; }
+        public DateTime? ExitDate { get; set; }
 
         [JsonProperty("structureID")]
         public long StructureId { get; set; }
