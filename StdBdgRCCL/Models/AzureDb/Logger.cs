@@ -15,7 +15,7 @@ namespace StdBdgRCCL.Models
             lock (_loggerLock)
             {
                 var optionsBuilder = new DbContextOptionsBuilder<LoggingContext>();
-                optionsBuilder.UseSqlServer("LoggingDb");
+                optionsBuilder.UseSqlServer(Environment.GetEnvironmentVariable("LoggingDb"));
                 using (var db = new LoggingContext(optionsBuilder.Options))
                 {
                     //TimeZoneInfo cstZone = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
@@ -31,7 +31,7 @@ namespace StdBdgRCCL.Models
                         SeverityLevel = 0,
                         StackTrace = stack
                     };
-                    db.Logs.Add(entry);
+                    db.Log.Add(entry);
                     db.SaveChanges();
                 }
             }

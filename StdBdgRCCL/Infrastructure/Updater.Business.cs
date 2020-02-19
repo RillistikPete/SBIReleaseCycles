@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using StdBdgRCCL.Models;
+using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,14 +17,15 @@ namespace StdBdgRCCL.Infrastructure
         private static string date = DateTime.Now.ToShortDateString();
         private static DateTime dateOnly = Convert.ToDateTime(date);
 
+        #region IC /studentEnrollments
         public async Task RunEdfiOdsSync(ICStudentEnrollment icStudentEnrollment)
         {
             string icStdNumber = icStudentEnrollment.StudentNumber.ToString();
             string icPersonId = icStudentEnrollment.PersonId.ToString();
-            HttpResponse<EdfiEnrollmentStudent> edfiEnrollmentStudentResponse = await _athen.GetEdFiEnrollmentStudentById(icStudentEnrollment.StudentNumber.ToString(), null);
+            HttpResponse<EdfiEnrollmentStudent> edfiEnrollmentStudentResponse = await _athen.GetEdFiEnrollmentStudentByStudentUniqueId(icStdNumber, null);
             if (!edfiEnrollmentStudentResponse.IsSuccessStatusCode)
             {
-                Logger.Log($"Failed getting EdFi Enrollment Student { icStudentEnrollment.StudentNumber }");
+                LoggerLQ.LogQueue($"Failed getting EdFi Enrollment Student { icStudentEnrollment.StudentNumber }");
                 _logger.LogInformation($"Failed getting EdFi Enrollment Student { icStudentEnrollment.StudentNumber }");
                 return;
             }
@@ -41,7 +43,7 @@ namespace StdBdgRCCL.Infrastructure
             if (!edfiSSAResponse.IsSuccessStatusCode)
             {
                 _logger.LogInformation($"Failed getting V3StudentSchoolAssociation for student { edfiStudUniqueId }");
-                Logger.Log("Failed getting V3StudentSchoolAssociation for student", edfiStudUniqueId);
+                LoggerLQ.LogQueue($"Failed getting V3StudentSchoolAssociation for student {edfiStudUniqueId}");
                 return;
             }
             List<StudentSchoolAssociation> listOfEdfiStudentSchoolAssociations = edfiSSAResponse.ResponseContent;
@@ -120,7 +122,7 @@ namespace StdBdgRCCL.Infrastructure
             if (edfiGradeLevel == "Grade Conversion Failed")
             {
                 _logger.LogInformation($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
-                Logger.Log($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
+                LoggerLQ.LogQueue($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
                 return;
             }
 
@@ -133,7 +135,7 @@ namespace StdBdgRCCL.Infrastructure
                 if (!edfiV3EnrollmentSchoolResponse.IsSuccessStatusCode)
                 {
                     _logger.LogInformation($"Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation { edfiSSA.SchoolReference.SchoolId }");
-                    Logger.Log("Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation", edfiSSA.SchoolReference.SchoolId.ToString());
+                    LoggerLQ.LogQueue($"Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation {edfiSSA.SchoolReference.SchoolId}");
                     return;
                 }
                 activeEdfiEnrollmentSchool = edfiV3EnrollmentSchoolResponse.ResponseContent;
@@ -153,7 +155,7 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     _logger.LogInformation($"No identification codes in EdFiEnrollmentSchool { edfiStudUniqueId }");
-                    Logger.Log("No identification codes in EdFiEnrollmentSchool", edfiStudUniqueId);
+                    LoggerLQ.LogQueue($"No identification codes in EdFiEnrollmentSchool {edfiStudUniqueId}");
                     return;
                 }
                 //-----------------------------------------------------------------------------------------
@@ -165,7 +167,7 @@ namespace StdBdgRCCL.Infrastructure
                 if (!calendar.IsSuccessStatusCode)
                 {
                     _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
-                    Logger.Log($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    LoggerLQ.LogQueue($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
                 if (calendar.Content != null)
                 {
@@ -184,7 +186,7 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
-                    //Logger.Log($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    //LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
             }
 
@@ -193,7 +195,7 @@ namespace StdBdgRCCL.Infrastructure
             if (!badgeStudentResponse.IsSuccessStatusCode)
             {
                 _logger.LogInformation($"Failure in badge student request {edfiStudUniqueId}");
-                //Logger.Log("Failure in badge student request.", edfiStudUniqueId);
+                //LoggerLQ.LogQueue("Failure in badge student request.", edfiStudUniqueId);
                 return;
             }
             BadgeStudent badgeStudent = badgeStudentResponse.ResponseContent;
@@ -211,7 +213,7 @@ namespace StdBdgRCCL.Infrastructure
                 if (!locations.IsSuccessStatusCode)
                 {
                     _logger.LogInformation($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
-                    //Logger.Log($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
+                    //LoggerLQ.LogQueue($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
                 }
                 if (locations.ResponseContent != null)
                 {
@@ -230,7 +232,7 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     _logger.LogInformation($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
-                    Logger.Log($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
+                    LoggerLQ.LogQueue($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
                 }
                 //====================================================================================================
                 //Check course 'Homeroom 9-12 SX' exists in studentSchedules
@@ -239,13 +241,13 @@ namespace StdBdgRCCL.Infrastructure
                 if (!studentScheduleResponse.IsSuccessStatusCode)
                 {
                     _logger.LogInformation($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
-                    Logger.Log($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
                     return;
                 }
                 if (studentScheduleResponse.ResponseContent.Count == 0)
                 {
                     _logger.LogInformation($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
-                    Logger.Log($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
                     //return;
                 }
                 if (studentScheduleResponse.ResponseContent != null)
@@ -255,7 +257,7 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     _logger.LogInformation($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
-                    Logger.Log($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
                 }
                 //-----------------------------------------------------------------------------------------
                 if (studentSchedule != null)
@@ -268,18 +270,299 @@ namespace StdBdgRCCL.Infrastructure
                     else
                     {
                         _logger.LogInformation($"Null homeroomSection for student {edfiStudUniqueId}");
-                        Logger.Log($"Null homeroomSection for student {edfiStudUniqueId}");
+                        LoggerLQ.LogQueue($"Null homeroomSection for student {edfiStudUniqueId}");
                     }
                 }
                 else
                 {
                     _logger.LogInformation($"Null studentSchedule for student {edfiStudUniqueId}");
-                    Logger.Log($"Null studentSchedule for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Null studentSchedule for student {edfiStudUniqueId}");
                 }
             }
 
             await BadgeCRUD(icStudentEnrollment, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
         }
+        #endregion
+
+        #region IC enrollment-changes
+        public async Task RunEdfiOdsSync(ICEnrollmentChange icEnrollmtChange)
+        {
+            string icPersonId = icEnrollmtChange.PersonId.ToString();
+            HttpResponse<ICStudentEnrollment> icStdEnrResponse = new HttpResponse<ICStudentEnrollment>();
+            ICStudentEnrollment icStudentEnrollmt = new ICStudentEnrollment();
+            icStdEnrResponse = await _athen.GetICStudentEnrollmentByPersonId(icPersonId);
+            if (!icStdEnrResponse.IsSuccess)
+            {
+                LoggerLQ.LogQueue($"Failed getting IC Student Enrollment for personID {icPersonId}");
+                _logger.LogInformation($"Failed getting IC Student Enrollment for personID {icPersonId}");
+                return;
+            }
+            if(icStdEnrResponse.ResponseContent != null)
+            {
+                icStudentEnrollmt = icStdEnrResponse.ResponseContent;
+            }
+            string studentNumber = icStudentEnrollmt.StudentNumber.ToString();
+            //-----------------------------------------------------------------------------------------
+            //Get edfi enrollment student by studentUniqueId
+            HttpResponse<EdfiEnrollmentStudent> edfiEnrollmentStudentResponse = await _athen.GetEdFiEnrollmentStudentByStudentUniqueId(studentNumber, null);
+            if (!edfiEnrollmentStudentResponse.IsSuccessStatusCode)
+            {
+                LoggerLQ.LogQueue($"Failed getting EdFi Enrollment Student { studentNumber }");
+                _logger.LogInformation($"Failed getting EdFi Enrollment Student { studentNumber }");
+                return;
+            }
+            EdfiEnrollmentStudent edfiEnrollmentStudent = edfiEnrollmentStudentResponse.ResponseContent;
+            var edfiStudUniqueId = edfiEnrollmentStudent.StudentUniqueId;
+            var edfiStudentId = edfiEnrollmentStudent.Id;
+            //-----------------------------------------------------------------------------------------
+            //Get StudentSchoolAssociations for enrollment/schools schoolId
+            IDictionary<string, string> stdAssociationsRequestProperties = new Dictionary<string, string>()
+            {
+                { "studentUniqueId", edfiStudUniqueId }
+            };
+            HttpResponse<List<StudentSchoolAssociation>> edfiSSAResponse = await _athen.GetStudentSchoolAssociationsByStudentUniqueId(edfiStudUniqueId, stdAssociationsRequestProperties);
+            if (!edfiSSAResponse.IsSuccessStatusCode)
+            {
+                _logger.LogInformation($"Failed getting V3StudentSchoolAssociation for student { edfiStudUniqueId }");
+                LoggerLQ.LogQueue($"Failed getting V3StudentSchoolAssociation for student {edfiStudUniqueId}");
+                return;
+            }
+            List<StudentSchoolAssociation> listOfEdfiStudentSchoolAssociations = edfiSSAResponse.ResponseContent;
+            EdfiEnrollmentSchool activeEdfiEnrollmentSchool = new EdfiEnrollmentSchool();
+            List<StudentSchoolAssociation> activeSSAList = new List<StudentSchoolAssociation>();
+            List<StudentSchoolAssociation> ssaWithdrawals = new List<StudentSchoolAssociation>();
+            StudentSchoolAssociation activeSSA = new StudentSchoolAssociation();
+            StudentSchoolAssociation ssaWithdrawal = new StudentSchoolAssociation();
+            foreach (var ssa in listOfEdfiStudentSchoolAssociations)
+            {
+                if (string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { activeSSAList.Add(ssa); }
+                else if (!string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { ssaWithdrawals.Add(ssa); }
+            }
+
+            if (activeSSAList.Count > 0)
+            {
+                activeSSA = activeSSAList[0];
+                if (activeSSAList.Count > 1)
+                {
+                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing latest date");
+                    List<DateTime> dList = new List<DateTime>();
+                    foreach (var date in activeSSAList)
+                    {
+                        var enDateTime = DateTime.Parse(date.EntryDate);
+                        dList.Add(enDateTime);
+                    }
+                    string dT = dList.Max().ToString("yyyy-MM-dd");
+                    activeSSA = activeSSAList.Where(x => x.EntryDate == dT).FirstOrDefault();
+                }
+            }
+            if (ssaWithdrawals.Count > 0)
+            {
+                ssaWithdrawal = ssaWithdrawals[0];
+                if (ssaWithdrawals.Count > 1)
+                {
+                    _logger.LogInformation($"Multiple withdrawals for student {edfiStudUniqueId} - choosing latest date");
+                    List<DateTime> dList = new List<DateTime>();
+                    foreach (var date in ssaWithdrawals)
+                    {
+                        var wdDateTime = DateTime.Parse(date.ExitWithdrawDate);
+                        dList.Add(wdDateTime);
+                    }
+                    string dT = dList.Max().ToString("yyyy-MM-dd");
+                    ssaWithdrawal = ssaWithdrawals.Where(x => x.ExitWithdrawDate == dT).FirstOrDefault();
+                }
+            }
+            // Set edfiSSA to active School Association or SSA with latest withdrawal date
+            var edfiSSA = activeSSA;
+
+            if (activeSSAList.Count == 0 || activeSSA == null)
+            {
+                _logger.LogInformation($"No active enrollments for studentUniqueId {edfiStudUniqueId}");
+                activeEdfiEnrollmentSchool = null;
+                if (ssaWithdrawal != null)
+                {
+                    edfiSSA = ssaWithdrawal;
+                }
+            }
+
+            //ServType
+            string servType = "";
+            if (activeSSA != null)
+            {
+                if (edfiSSA.PrimarySchool == true) { servType = "P"; }
+                else { servType = "S"; }
+            }
+
+            //Get grade level
+            string gradeLevel = "";
+            string edfiGradeLevel = "";
+            if (!string.IsNullOrEmpty(edfiSSA.EntryGradeLevelDescriptor) || !string.IsNullOrWhiteSpace(edfiSSA.EntryGradeLevelDescriptor))
+            {
+                gradeLevel = edfiSSA.EntryGradeLevelDescriptor.Substring(37);
+                edfiGradeLevel = Helpers.EdFiGradeConverter.ConvertGrade(gradeLevel);
+            }
+            if (edfiGradeLevel == "Grade Conversion Failed")
+            {
+                _logger.LogInformation($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
+                LoggerLQ.LogQueue($"Failed converting grade for EdFi Enrollment Student {edfiStudUniqueId}");
+                return;
+            }
+
+            //Get enrollment/schools > IDCodes for BadgeStudent SchoolCode
+            string enrollmentSchoolIDCode = "";
+            string calendarYr = "";
+            if (activeEdfiEnrollmentSchool != null)
+            {
+                HttpResponse<EdfiEnrollmentSchool> edfiV3EnrollmentSchoolResponse = await _athen.GetEdFiEnrollmentSchoolById(edfiSSA.SchoolReference.SchoolId);
+                if (!edfiV3EnrollmentSchoolResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation { edfiSSA.SchoolReference.SchoolId }");
+                    LoggerLQ.LogQueue($"Failed getting EdFiEnrollmentSchool for StudentSchoolAssociation {edfiSSA.SchoolReference.SchoolId}");
+                    return;
+                }
+                activeEdfiEnrollmentSchool = edfiV3EnrollmentSchoolResponse.ResponseContent;
+                if (activeEdfiEnrollmentSchool.IdentificationCodes.Count > 0)
+                {
+                    if (activeEdfiEnrollmentSchool.IdentificationCodes.Exists(c => c.EducationOrganizationIdentificationSystemDescriptor.Equals("uri://ed-fi.org/EducationOrganizationIdentificationSystemDescriptor#LEA")))
+                    {
+                        enrollmentSchoolIDCode = activeEdfiEnrollmentSchool.IdentificationCodes.Find(c =>
+                        c.EducationOrganizationIdentificationSystemDescriptor.Equals("uri://ed-fi.org/EducationOrganizationIdentificationSystemDescriptor#LEA")).IDCode;
+                    }
+                    else
+                    {
+                        enrollmentSchoolIDCode = null;
+                        _logger.LogInformation($"No LEA ID Code for enrollment school <{activeEdfiEnrollmentSchool.NameOfInstitution}> - studentId {edfiStudUniqueId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"No identification codes in EdFiEnrollmentSchool { edfiStudUniqueId }");
+                    LoggerLQ.LogQueue($"No identification codes in EdFiEnrollmentSchool {edfiStudUniqueId}");
+                    return;
+                }
+                //-----------------------------------------------------------------------------------------
+                //-----------------------------------------------------------------------------------------
+                //Calendar year
+                //Check quarter for correct year
+                HttpResponse<Models.Calendar> calendar = new HttpResponse<Models.Calendar>();
+                calendar = await _athen.GetCalendarBySchoolId(edfiSSA.SchoolReference.SchoolId, null);
+                if (!calendar.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    LoggerLQ.LogQueue($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                }
+                if (calendar.Content != null)
+                {
+                    if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
+                    {
+                        DateTime nYr = DateTime.Now.AddYears(1);
+                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                    }
+                    else if (quarter.Item1 == "Q3" || quarter.Item1 == "Q4")
+                    {
+                        DateTime lYr = DateTime.Now.AddYears(-1);
+                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                    }
+                    else if (quarter.Item1 == "Outside of school year") { _logger.LogInformation($"Quarter invlaid - Outside of school year"); }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    //LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                }
+            }
+
+            //-----------------------------------------------------------------------------------------
+            var badgeStudentResponse = await GetBadgeStudentAsync(edfiStudUniqueId);
+            if (!badgeStudentResponse.IsSuccessStatusCode)
+            {
+                _logger.LogInformation($"Failure in badge student request {edfiStudUniqueId}");
+                //LoggerLQ.LogQueue("Failure in badge student request.", edfiStudUniqueId);
+                return;
+            }
+            BadgeStudent badgeStudent = badgeStudentResponse.ResponseContent;
+            //-----------------------------------------------------------------------------------------
+            //-----------------------------------------------------------------------------------------
+            //Use edfiSSA (active) to find Location by schoolId (Phase 2 Implementation Jan2020)
+            string homeroom = "";
+            string homeroomCode = "";
+            Location locatn;
+            bool cbtpExists = false;
+            if (activeEdfiEnrollmentSchool != null)
+            {
+                HttpResponse<List<Location>> locations = await _athen.GetLocationsBySchoolId(edfiSSA.SchoolReference.SchoolId, null);
+                if (!locations.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
+                    //LoggerLQ.LogQueue($"Failed getting Locations by schoolId for school {edfiSSA.SchoolReference.SchoolId}");
+                }
+                if (locations.ResponseContent != null)
+                {
+                    cbtpExists = locations.ResponseContent.Exists(x => x.ClassroomIdentificationCode == "CBTP");
+                    locatn = locations.ResponseContent.Where(x => x.ClassroomIdentificationCode == "CBTP").FirstOrDefault();
+                    if (cbtpExists && locatn != null)
+                    {
+                        homeroom = locatn.ClassroomIdentificationCode;
+                    }
+                    else
+                    {
+                        // Do nothing
+                        //_logger.LogInformation($"No classroom of 'CBTP' for school {edfiSSA.SchoolReference.SchoolId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
+                    LoggerLQ.LogQueue($"Null locations content for school {edfiSSA.SchoolReference.SchoolId}");
+                }
+                //====================================================================================================
+                //Check course 'Homeroom 9-12 SX' exists in studentSchedules
+                List<StudentSchedule> studentSchedule = new List<StudentSchedule>();
+                var studentScheduleResponse = await _athen.GetStudentScheduleById(edfiStudUniqueId);
+                if (!studentScheduleResponse.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Failed retrieving student schedule request for student {edfiStudUniqueId}");
+                    return;
+                }
+                if (studentScheduleResponse.ResponseContent.Count == 0)
+                {
+                    _logger.LogInformation($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"No student schedules in studentSchedules resource for student {edfiStudUniqueId}");
+                    //return;
+                }
+                if (studentScheduleResponse.ResponseContent != null)
+                {
+                    studentSchedule = studentScheduleResponse.ResponseContent;
+                }
+                else
+                {
+                    _logger.LogInformation($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Null studentScheduleResponse.Content for student {edfiStudUniqueId}");
+                }
+                //-----------------------------------------------------------------------------------------
+                if (studentSchedule != null)
+                {
+                    Boolean hr9thru12Exists = studentSchedule.Exists(x => x.Course == ("Homeroom 9-12 " + quarter.Item2));
+                    if (!string.IsNullOrWhiteSpace(homeroom) && !string.IsNullOrEmpty(homeroom) && hr9thru12Exists)
+                    {
+                        homeroomCode = homeroom;
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Null homeroomSection for student {edfiStudUniqueId}");
+                        LoggerLQ.LogQueue($"Null homeroomSection for student {edfiStudUniqueId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation($"Null studentSchedule for student {edfiStudUniqueId}");
+                    LoggerLQ.LogQueue($"Null studentSchedule for student {edfiStudUniqueId}");
+                }
+            }
+
+            await BadgeCRUD(icStudentEnrollmt, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
+        }
+        #endregion
 
         public async Task<HttpResponse<BadgeStudent>> GetBadgeStudentAsync(string studentId)
         {
@@ -353,7 +636,7 @@ namespace StdBdgRCCL.Infrastructure
                     if (badgeStudent.Homeroom == "CBTP")
                     {
                         _logger.LogInformation($"Setting homeroom to CBTP for student {badgeStudent.StudentId}");
-                        Logger.Log($"Setting homeroom to CBTP for student {badgeStudent.StudentId}");
+                        LoggerLQ.LogQueue($"Setting homeroom to CBTP for student {badgeStudent.StudentId}");
                     }
                     badgeStudent.PersonId = icStudentEnrollment.PersonId.ToString();
                     badgeStudent.ServType = servType;
@@ -417,14 +700,14 @@ namespace StdBdgRCCL.Infrastructure
                     bool updateSuccess = false;
                     if (repoResponse.HttpRespMsg.IsSuccessStatusCode)
                     {
-                        Logger.Log($"Successfully updated student badge {badgeStudent.StudentId}");
                         _logger.LogInformation($"Successfully updated student badge {badgeStudent.StudentId}");
+                        LoggerLQ.LogQueue($"Successfully updated student badge {badgeStudent.StudentId}");
                         updateSuccess = true;
                     }
                     else
                     {
                         _logger.LogInformation($"Failed updating student badge {badgeStudent.StudentId}");
-                        Logger.Log($"Failed updating student badge {badgeStudent.StudentId}");
+                        LoggerLQ.LogQueue($"Failed updating student badge {badgeStudent.StudentId}");
                     }
 
                     //if (updateSuccess)
@@ -455,12 +738,12 @@ namespace StdBdgRCCL.Infrastructure
                     //    var resp = await _repo.PostPersonsHistoryToStudentHistoricals(pHistoryObject);
                     //    if (resp.Response.IsSuccessStatusCode)
                     //    {
-                    //        Logger.Log($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student update");
+                    //        LoggerLQ.LogQueue($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student update");
                     //        _logger.LogInformation($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for normal badge student update");
                     //    }
                     //    else
                     //    {
-                    //        Logger.Log($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student update");
+                    //        LoggerLQ.LogQueue($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student update");
                     //        _logger.LogInformation($"Failed to post student-historicals object {pHistoryObject.Bmsid} - normal badge student update. \r\n");
                     //    }
                     //}
@@ -494,7 +777,7 @@ namespace StdBdgRCCL.Infrastructure
                     else
                     {
                         _logger.LogInformation($"Failed updating withdrawal for student {edfiStudUniqueId}");
-                        Logger.Log($"Failed updating withdrawal for student {edfiStudUniqueId}");
+                        LoggerLQ.LogQueue($"Failed updating withdrawal for student {edfiStudUniqueId}");
                     }
                     //if (updateSuccess)
                     //{
@@ -526,12 +809,12 @@ namespace StdBdgRCCL.Infrastructure
                     //    if (resp.Response.IsSuccessStatusCode)
                     //    {
                     //        _logger.LogInformation($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
-                    //        Logger.Log($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
+                    //        LoggerLQ.LogQueue($"Successfully posted student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
                     //    }
                     //    else
                     //    {
                     //        _logger.LogInformation($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal");
-                    //        Logger.Log($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
+                    //        LoggerLQ.LogQueue($"Failed to post student-historicals object {pHistoryObject.Bmsid} for badge student withdrawal.");
                     //    }
                     //}
                 }
@@ -595,26 +878,19 @@ namespace StdBdgRCCL.Infrastructure
                 if (repoResponse.HttpRespMsg.IsSuccessStatusCode)
                 {
                     _logger.LogInformation($"Created student badge {badgeStudent.StudentId}");
-                    Logger.Log($"Created student badge {badgeStudent.StudentId}");
+                    LoggerLQ.LogQueue($"Created student badge {badgeStudent.StudentId}");
                 }
                 else
                 {
-                    Logger.Log($"Failed creating student badge {badgeStudent.StudentId} \r\n",
-                        $"Details --------- \r\n" +
-                        $"Headers: \r\n" +
-                        $"{repoResponse.HttpRespMsg.Headers} \r\n" +
-                        $"Request Message: \r\n" +
-                        $"{repoResponse.HttpRespMsg.RequestMessage} r\n" +
-                        $"Reason: \r\n" +
-                        $"{repoResponse.Message}");
+                    LoggerLQ.LogQueue($"Failed creating student badge {badgeStudent.StudentId}");
 
-                    //Logger.TrackTelemetryEvent("Request Failure", new Dictionary<string, string> {
+                    //LoggerLQ.TrackTelemetryEvent("Request Failure", new Dictionary<string, string> {
                     //{ "Description", $"Failed creating student badge {badgeStudent.StudentId}" },
                     //{ "Headers", repoResponse.Response.Headers.ToString() },
                     //{ "Request Message", repoResponse.Response.RequestMessage.ToString() },
                     //{ "Reason", repoResponse.Message }
                     //});
-                    Logger.Log($"Failed creating student badge {badgeStudent.StudentId}", edfiStudUniqueId);
+                    LoggerLQ.LogQueue($"Failed creating student badge {badgeStudent.StudentId}");
                 }
                 return;
             }
@@ -634,6 +910,7 @@ namespace StdBdgRCCL.Infrastructure
         {
             string today = DateTime.Now.ToShortDateString();
             string studUniqId = "190313633";
+            int pagesize = 1000;
             int offset = 0;
             const int limit = 100;
             bool isFinished = false;
@@ -644,17 +921,68 @@ namespace StdBdgRCCL.Infrastructure
 
             do
             {
-
+                if(typeOfSync == TypeOfSync.EnrollmtChanges)
+                {
+                    _logger.LogInformation($"Getting IC student enrollment changes, offset {offset}, pagesize {pagesize}");
+                    List<ICEnrollmentChange> icEnrChangeList = new List<ICEnrollmentChange>();
+                    HttpResponse<List<ICEnrollmentChange>> enrChangesResponse = new HttpResponse<List<ICEnrollmentChange>>();
+                    enrChangesResponse = await _athen.GetICEnrollmentChanges(offset, pagesize);
+                    if (!enrChangesResponse.IsSuccess)
+                    {
+                        _logger.LogInformation($"Failed getting IC enrollment changes on offset {offset}");
+                        LoggerLQ.LogQueue($"Failed getting IC enrollment changes on offset {offset}");
+                        break;
+                    }
+                    if(enrChangesResponse.ResponseContent != null)
+                    {
+                        icEnrChangeList = enrChangesResponse.ResponseContent;
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"Null enrChangesResponse.ResponseContent at GetICEnrollmentChanges({offset}, {pagesize}");
+                        LoggerLQ.LogQueue($"Null enrChangesResponse.ResponseContent at GetICEnrollmentChanges({offset}, {pagesize}");
+                    }
+                    if(icEnrChangeList.Count > 0)
+                    {
+                        foreach(var icEnrChange in icEnrChangeList)
+                        {
+                            try
+                            {
+                                var result = RunEdfiOdsSync(icEnrChange);
+                                if (result != null)
+                                {
+                                    tasks.Add(result);
+                                }
+                                else
+                                {
+                                    _logger.LogInformation($"Null result at RunEdfiOdsSync()");
+                                    LoggerLQ.LogQueue($"Null result at RunEdfiOdsSync()");
+                                }
+                            }
+                            catch (Exception exc)
+                            {
+                                _logger.LogInformation($"Exception in RunEdfiOdsSync() for enrollment-changes; {exc.Message}");
+                                throw;
+                            }
+                        }
+                    }
+                    batchNumber++;
+                    offset += icEnrChangeList.Count;
+                    if(icEnrChangeList.Count == 0)
+                    {
+                        isFinished = true;
+                    }
+                }
                 if (typeOfSync == TypeOfSync.SingleEnrStudent)
                 {
                     //GET SINGLE IC STUDENT ENR
                     HttpResponse<ICStudentEnrollment> icStdEnrollmentResult = new HttpResponse<ICStudentEnrollment>();
-                    //_logger.LogInformation($"Getting next batch of ed-fi enrollments {today}, offset {offset}");
+                    _logger.LogInformation($"Getting next IC student enrollment {today}, offset {offset}");
                     icStdEnrollmentResult = await _athen.GetICStudentEnrollmentByStudentNumber(studUniqId);
                     if (!icStdEnrollmentResult.IsSuccessStatusCode)
                     {
-                        //_logger.LogInformation($"Failed getting next batch of EdFi Student School Associations on offset {offset}");
-                        Logger.Log($"Failed getting IC Enrollment Student {studUniqId} on offset {offset}");
+                        _logger.LogInformation($"Failed getting next IC student enrollment {studUniqId} on offset {offset}");
+                        LoggerLQ.LogQueue($"Failed getting next IC student enrollment {studUniqId} on offset {offset}");
                         break;
                     }
                     ICStudentEnrollment icStdEnrmt = icStdEnrollmentResult.ResponseContent;
@@ -673,7 +1001,7 @@ namespace StdBdgRCCL.Infrastructure
                 catch (Exception e)
                 {
                     //_logger.LogInformation($"Error in synchronizing batch {batchNumber} of enrollments. {e.Message}");
-                    Logger.Log($"Error in synchronizing batch {batchNumber} - {e.Message}");
+                    LoggerLQ.LogQueue($"Error in synchronizing batch {batchNumber} - {e.Message}");
                 }
             } while (!isFinished);
         }

@@ -10,6 +10,12 @@ namespace StdBdgRCCL.Interfaces
     public interface IAthenaeum
     {
         /// <summary>
+        /// Gets latest IC Enrollment Changes
+        /// </summary>
+        /// <returns></returns>
+        Task<HttpResponse<List<ICEnrollmentChange>>> GetICEnrollmentChanges(int offset, int pagesize);
+
+        /// <summary>
         /// Gets the IC Student Enrollment resource based on the student id
         /// </summary>
         /// <param name="studentId">Student Number (190xxxxxx)</param>
@@ -17,11 +23,18 @@ namespace StdBdgRCCL.Interfaces
         Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId);
 
         /// <summary>
+        /// Gets the IC Student Enrollment resource based on the personid
+        /// </summary>
+        /// <param name="personID">PersonID</param>
+        /// <returns></returns>
+        Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByPersonId(string personID);
+
+        /// <summary>
         /// Gets an EdFi Enrollment Student specified by id.
         /// </summary>
         /// <param name="id">Guid id of student</param>
         /// <returns>EdFiEnrollmentStudent Object</returns>
-        Task<HttpResponse<EdfiEnrollmentStudent>> GetEdFiEnrollmentStudentById(string id, IDictionary<string, string> properties);
+        Task<HttpResponse<EdfiEnrollmentStudent>> GetEdFiEnrollmentStudentByStudentUniqueId(string stdUniqueId, IDictionary<string, string> properties);
 
         /// <summary>
         /// Gets records from StudentSchoolAssociations resource by studentUniqueId

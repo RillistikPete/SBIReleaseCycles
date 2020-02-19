@@ -23,14 +23,24 @@ namespace StdBdgRCCL.Infrastructure
 
         #region Implementation
 
+        public async Task<HttpResponse<List<ICEnrollmentChange>>> GetICEnrollmentChanges(int offset, int pagesize)
+        {
+            return await _icClient.GetByExample<ICEnrollmentChange>($"enrollment-changes?offset={offset}&pagesize={pagesize}");
+        }
+
         public async Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId)
         {
             return await _icClient.GetSingleByExample<ICStudentEnrollment>($"studentEnrollments?sysfilter=equal(studentNumber: \"{studentId}\") ", null);
         }
 
-        public async Task<HttpResponse<EdfiEnrollmentStudent>> GetEdFiEnrollmentStudentById(string id, IDictionary<string, string> properties)
+        public async Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByPersonId(string personID)
         {
-            return await _edfiClientComposite.GetSingleByExample<EdfiEnrollmentStudent>($"enrollment/students?studentUniqueId={id}", properties);
+            return await _icClient.GetSingleByExample<ICStudentEnrollment>($"studentEnrollments?sysfilter=equal(personID: \"{personID}\") ", null);
+        }
+
+        public async Task<HttpResponse<EdfiEnrollmentStudent>> GetEdFiEnrollmentStudentByStudentUniqueId(string stdUniqueId, IDictionary<string, string> properties)
+        {
+            return await _edfiClientComposite.GetSingleByExample<EdfiEnrollmentStudent>($"enrollment/students?studentUniqueId={stdUniqueId}", properties);
         }
 
         public async Task<HttpResponse<List<StudentSchoolAssociation>>> GetStudentSchoolAssociationsByStudentUniqueId(string studentUniqueId, IDictionary<string, string> properties)

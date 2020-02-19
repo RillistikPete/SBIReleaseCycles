@@ -13,7 +13,7 @@ namespace StdBdgRCCL.Infrastructure
     {
         private readonly IAthenaeum _athen;
         private readonly ILogger _logger;
-        public enum TypeOfSync { AllEnrStudents, SingleEnrStudent, SchoolAssociations, SpecialConditn }
+        public enum TypeOfSync { EnrollmtChanges, SingleEnrStudent, SchoolAssociations, SpecialConditn }
 
         public Updater(IAthenaeum athenaeum, ILogger logger)
         {
@@ -24,7 +24,7 @@ namespace StdBdgRCCL.Infrastructure
         public async Task UpdateStudents()
         {
             _logger.LogInformation("Checking for updates in IC");
-            await UpdateStudentsFromIC(TypeOfSync.SingleEnrStudent);
+            await UpdateStudentsFromIC(TypeOfSync.EnrollmtChanges);
         }
     }
 }

@@ -18,6 +18,7 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="limit">Record limit</param>
         /// <returns>List of records with model specified in Type</returns>
         Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null);
+
         /// <summary>
         /// Send a GET request with query search parameters
         /// </summary>
@@ -45,6 +46,7 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="resourceUri">Resource Endpoint URI including the query parameters (ex: "endpoint?customId=123")</param>
         /// <returns>A single record with model specified in Type</returns>
         Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new();
+
         /// <summary>
         /// Send a GET request for a specific record by guid id
         /// </summary>
@@ -53,6 +55,7 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="id">Record Id</param>
         /// <returns></returns>
         Task<HttpResponse<T>> GetById<T>(string resourceUri, string id, IDictionary<string, string> properties = null) where T : new();
+
         /// <summary>
         /// Send a GET request that should only return one record
         /// </summary>
@@ -60,6 +63,7 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="resourceUri">Resource Endpoint URI</param>
         /// <returns>Single Record Object specified by <typeparamref name="T"/></returns>
         Task<HttpResponse<T>> GetSingle<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new();
+
         /// <summary>
         /// Send a GET request and get all available records.
         /// </summary>
@@ -69,6 +73,7 @@ namespace StdBdgRCCL.Interfaces
         /// <param name="limit">Record limit</param>
         /// <returns>List of records with model specified in Type</returns>
         Task<List<T>> GetAll<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null);
+
         /// <summary>
         /// Send a PUT request
         /// </summary>

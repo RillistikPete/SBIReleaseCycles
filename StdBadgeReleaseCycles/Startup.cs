@@ -60,11 +60,8 @@ namespace StdBadgeReleaseCycles
             builder.Services.AddScoped<IEdfiClient, EdfiClientBase>();
             builder.Services.AddScoped<IEdfiClient, EdfiClientCompositeBase>();
             builder.Services.AddScoped<IICClient, ICClientBase>();
-        }
 
-        public void ConfigureServices(IServiceCollection services)
-        {
-            services.AddDbContextPool<LoggingContext>(options => options.UseSqlServer(_config.GetConnectionString("LoggingDb")));
+            builder.Services.AddDbContextPool<LoggingContext>(options => options.UseSqlServer(_config.GetConnectionString("LoggingDb")));
         }
 
         public Startup(IConfiguration config)
