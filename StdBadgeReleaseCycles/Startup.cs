@@ -1,40 +1,23 @@
-﻿using Microsoft.Azure.WebJobs.Hosting;
-using Microsoft.Azure.WebJobs;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Microsoft.Azure.Functions.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Azure.Functions.Extensions.DependencyInjection;
 using StdBdgRCCL.Infrastructure;
-using StdBdgRCCL.Interfaces;
-using System.Net.Http.Headers;
-using System.Threading.Tasks;
+using StdBdgRCCL.Infrastructure.ClientBase;
 using StdBdgRCCL.Infrastructure.Setup;
+using StdBdgRCCL.Interfaces;
+using System;
 
 [assembly: FunctionsStartup(typeof(StdBadgeReleaseCycles.Startup))]
 
 namespace StdBadgeReleaseCycles
 {
-
     public class Startup : FunctionsStartup
     {
-        private static string _edfiToken { get; set; } = "";
-        private static long _edfiTokenExpiration { get; set; }
-        private static string _icToken { get; set; } = "";
-        private static long _icTokenExpiration { get; set; }
-        //private readonly CancellationToken _cancellationToken;
-
-        public static async Task FillTokens()
-        {
-            var token = await Authorization.GetEdFiToken();
-            _edfiToken = token.AccessToken;
-            _edfiTokenExpiration = token.ExpiresIn;
-
-            var icToken = await Authorization.GetICToken();
-            _icToken = icToken.AccessToken;
-            _icTokenExpiration = icToken.ExpiresIn;
-            return;
-        }
+        private IConfiguration _config;
+        private static readonly string edfiApiBaseUri = Environment.GetEnvironmentVariable("EdFiApiBaseUri");
+        private static readonly string edfiOAuthUri = Environment.GetEnvironmentVariable("EdFiOAuthUri");
+        private static readonly string apiBaseUri = Environment.GetEnvironmentVariable("ApiBaseUri");
 
         public override void Configure(IFunctionsHostBuilder builder)
         {
@@ -42,27 +25,48 @@ namespace StdBadgeReleaseCycles
             {
                 c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _edfiToken);
             });
 
             builder.Services.AddHttpClient("edfiClientComposite", c =>
             {
-                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiV3CompositeBaseUri"));
+                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("EdFiApiBaseUri") + Environment.GetEnvironmentVariable("EdFiCompositeBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _edfiToken);
             });
+
             builder.Services.AddHttpClient("icClient", c =>
             {
                 c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("ApiBaseUri") + Environment.GetEnvironmentVariable("ICBaseUri"));
                 c.DefaultRequestHeaders.Add("Accept", "application/json");
-                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _icToken);
             });
-            builder.Services.AddSingleton((s)=> { return new Athenaeum(); });
-            builder.Services.AddScoped<IUpdater, Updater>();
-        }
-        //public void Configure(IWebJobsBuilder builder)
-        //{
 
-        //}
+            builder.Services.AddHttpClient("badgeClient", c =>
+            {
+                c.BaseAddress = new Uri(Environment.GetEnvironmentVariable("ApiBaseUri") + Environment.GetEnvironmentVariable("BadgeBaseUri"));
+                c.DefaultRequestHeaders.Add("Accept", "application/json");
+            });
+
+            builder.Services.AddSingleton((s) =>
+            {
+                return new Athenaeum(new EdfiClientBase(Authorization.edfiClient), new EdfiClientCompositeBase(Authorization.edfiClientComp),
+                 new ICClientBase(Authorization.icClient), new BadgeClientBase(Authorization.badgeClient));
+            });
+            builder.Services.AddScoped<IUpdater, Updater>();
+            builder.Services.AddScoped<IAthenaeum, Athenaeum>();
+            builder.Services.AddScoped<IEdfiClient, EdfiClientBase>();
+            builder.Services.AddScoped<IEdfiClient, EdfiClientCompositeBase>();
+            builder.Services.AddScoped<IICClient, ICClientBase>();
+
+            builder.Services.AddDbContextPool<LoggingContext>(options => options.UseSqlServer(_config.GetConnectionString("LoggingDb")));
+        }
+
+        public Startup(IConfiguration config)
+        {
+            _config = config;
+        }
+
+        public Startup()
+        {
+            //parameterless ctor
+        }
     }
 }

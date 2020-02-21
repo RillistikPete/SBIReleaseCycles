@@ -1,26 +1,37 @@
-﻿using StdBdgRCCL.Models;
+﻿using Newtonsoft.Json;
+using StdBdgRCCL.Interfaces;
+using StdBdgRCCL.Models;
+using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure.ClientBase
 {
-    public class EdfiClientCompositeBase
+    public class EdfiClientCompositeBase : IEdfiClient
     {
+        private const string _clientName = "EdFiCompositeClient";
+        public static HttpClient edfiClientComp;
+        public EdfiClientCompositeBase(HttpClient client)
+        {
+            edfiClientComp = client;
+        }
+
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {
             try
             {
                 var fullResourceUri = $"{resourceUri}?offset={offset}&limit={limit}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestForListAsync<T>(request, Clients._EdFiClientComposite, "EdFiCompositeClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<List<T>> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at Get<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -45,12 +56,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestForListAsync<T>(request, Clients._EdFiClientComposite, "EdFiClientComposite");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<List<T>> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetByExample<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -75,12 +86,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestForListAsync<T>(request, Clients.EdFiClient, "EdFiClient");
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<List<T>> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetByExampleLowerLimit<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -97,12 +108,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                     foreach (var prop in properties)
                         request.Properties.Add(prop.Key, prop.Value);
                 }
-                return await Clients.SendRequestAsync<T>(request, Clients._EdFiClientComposite, "EdFiClientComposite");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Client Composite \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetSingleByExample<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -114,12 +125,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}{id}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestAsync<T>(request, Clients._EdFiClientComposite, "EdFiClientComposite");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFi Composite Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetById<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -131,12 +142,12 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             {
                 var fullResourceUri = $"{resourceUri}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-                return await Clients.SendRequestAsync<T>(request, Clients._EdFiClientComposite, "EdFiClientComposite");
+                return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClientComp, _clientName);
             }
             catch (Exception ex)
             {
-                Logger.Log("Get request failed in EdFiComposite  Client \r\n", $"{ex}");
-                var repoResponse = new RepoResponse<T> { IsSuccessStatusCode = false };
+                LoggerLQ.LogQueue($"Get request failed in EdFi Composite Client Base at GetSingle<T>, {_clientName} \r\n {ex.Message}");
+                var repoResponse = new HttpResponse<T> { IsSuccess = false };
 
                 return repoResponse;
             }
@@ -149,9 +160,9 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             do
             {
                 var fetch = await Get<T>(resourceUri, offset, limit);
-                allRecords.AddRange(fetch.Content);
+                allRecords.AddRange(fetch.ResponseContent);
 
-                if (fetch.Content.Count == limit)
+                if (fetch.ResponseContent.Count == limit)
                 {
                     offset += limit;
                 }
@@ -172,10 +183,8 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
             };
 
-            HttpResponseMessage response = await Clients._EdFiClientComposite.SendAsync(request);
+            HttpResponseMessage response = await edfiClientComp.SendAsync(request);
             return response;
-
-
         }
     }
 }

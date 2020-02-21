@@ -5,19 +5,17 @@ using System.Text;
 
 namespace StdBdgRCCL.Models
 {
-    public class HttpResponse<T>
+    public class HttpResponse<T> : HttpResponseMessage
     {
         public bool IsSuccess { get; set; }
         public string Message { get; set; }
-        public IEnumerable<T> ResponseContent { get; set; }
-        public T RespContent { get; set; }
+        public T ResponseContent { get; set; }
 
-        public HttpResponse(bool statusCode, string message, IEnumerable<T> responseContent, T rcontent)
-        {
-            IsSuccess = statusCode;
-            Message = message;
-            ResponseContent = responseContent;
-            RespContent = rcontent;
-        }
+        //public HttpResponse(bool statusCode, string message, T responseContent)
+        //{
+        //    IsSuccess = statusCode;
+        //    Message = message;
+        //    ResponseContent = responseContent;
+        //}
     }
 }
