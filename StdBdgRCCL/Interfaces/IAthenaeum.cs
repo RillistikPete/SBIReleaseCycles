@@ -20,7 +20,7 @@ namespace StdBdgRCCL.Interfaces
         /// </summary>
         /// <param name="studentId">Student Number (190xxxxxx)</param>
         /// <returns></returns>
-        Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId);
+        Task<HttpResponse<List<ICStudentEnrollment>>> GetICStudentEnrollmentByStudentNumber(string studentId);
 
         /// <summary>
         /// Gets the IC Student Enrollment resource based on the personid

@@ -17,7 +17,7 @@ namespace StdBdgRCCL.Models
         public long StudentNumber { get; set; }
 
         [JsonProperty("edFiID")]
-        public long EdFiId { get; set; }
+        public long? EdFiId { get; set; }
 
         [JsonProperty("lastModified")]
         public DateTimeOffset LastModified { get; set; }

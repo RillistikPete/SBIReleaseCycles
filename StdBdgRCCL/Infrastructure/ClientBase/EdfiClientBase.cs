@@ -5,6 +5,7 @@ using StdBdgRCCL.Models;
 using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -14,7 +15,8 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
 {
     public class EdfiClientBase : IEdfiClient
     {
-        private const string _clientName = "EdFiClient";
+        private const string _clientName = "EdfiClient";
+        private const string _className = "EdfiClientBase";
         public static HttpClient edfiClient;
         public EdfiClientBase(HttpClient client)
         {
@@ -22,23 +24,23 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
         }
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
         {
+            const string _functionName = "Get<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}?offset={offset}&limit={limit}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
                 return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at Get<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<List<T>> { IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
         public async Task<HttpResponse<List<T>>> GetByExample<T>(string resourceUri, IDictionary<string, string> properties = null, int offset = 0, int limit = 100)
         {
+            const string _functionName = "GetByExample<T>()";
             var fullResourceUri = "";
             try
             {
@@ -58,17 +60,16 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 }
                 return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at GetByExample<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<List<T>> { IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
         public async Task<HttpResponse<List<T>>> GetByExampleLowerLimit<T>(string resourceUri, IDictionary<string, string> properties = null, int offset = 0, int limit = 25)
         {
+            const string _functionName = "GetByExampleLowerLimit<T>()";
             var fullResourceUri = "";
             try
             {
@@ -88,17 +89,16 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 }
                 return await AsyncRequestHost.SendRequestForListAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at GetByExampleLowerLimit<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<List<T>> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<List<T>> { IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
         public async Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new()
         {
+            const string _functionName = "GetSingleByExample<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}";
@@ -110,83 +110,64 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 }
                 return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at GetSingleByExample<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<T> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<T> { IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
         public async Task<HttpResponse<T>> GetById<T>(string resourceUri, string id, IDictionary<string, string> properties = null) where T : new()
         {
+            const string _functionName = "GetById<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}{id}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
                 return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at GetById<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<T> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, {_clientName} \r\n {exc.Message}");
+                return new HttpResponse<T> { IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
         public async Task<HttpResponse<T>> GetSingle<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new()
         {
+            const string _functionName = "GetSingle<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}";
                 HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
                 return await AsyncRequestHost.SendRequestAsync<T>(request, edfiClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in EdFi Client Base at GetSingle<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<T>{ IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<T>{ IsSuccess = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             }
         }
 
-        public async Task<List<T>> GetAll<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null)
+        public async Task<ServerResponse> Put(string resourceUri, string id, dynamic dto)
         {
-            List<T> allRecords = new List<T>();
-            bool isFinished = false;
-            do
+            const string _functionName = "Put()";
+            try
             {
-                var fetch = await Get<T>(resourceUri, offset, limit);
-                allRecords.AddRange(fetch.ResponseContent);
-
-                if (fetch.ResponseContent.Count == limit)
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, $"{resourceUri}{id}")
                 {
-                    offset += limit;
-                }
-                else
-                {
-                    isFinished = true;
-                }
-            } while (!isFinished);
-
-
-            return allRecords;
-        }
-
-        public async Task<HttpResponseMessage> Put(string resourceUri, string id, dynamic dto)
-        {
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, $"{resourceUri}{id}")
+                    Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
+                };
+                return await AsyncRequestHost.SendPropagateRequestAsync(request, edfiClient, _clientName);
+            }
+            catch (Exception exc)
             {
-                Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
-            };
-
-            HttpResponseMessage response = await edfiClient.SendAsync(request);
-            return response;
-
-
+                return new ServerResponse
+                {
+                    HttpRespMsg = new HttpResponseMessage(HttpStatusCode.BadRequest),
+                    Message = $"Exception in {_className} at {_functionName}; {exc.Message}"
+                };
+            }
         }
     }
 }

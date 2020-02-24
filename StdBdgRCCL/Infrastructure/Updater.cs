@@ -7,7 +7,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace StdBdgRCCL.Infrastructure
+namespace StdBdgRCCL
 {
     public partial class Updater : IUpdater
     {
@@ -24,7 +24,7 @@ namespace StdBdgRCCL.Infrastructure
         public async Task UpdateStudents()
         {
             _logger.LogInformation("Checking for updates in IC");
-            await UpdateStudentsFromIC(TypeOfSync.EnrollmtChanges);
+            await UpdateStudentsFromIC(TypeOfSync.SingleEnrStudent);
         }
     }
 }

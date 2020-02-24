@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace StdBdgRCCL.Infrastructure
+namespace StdBdgRCCL
 {
     public partial class Updater
     {
@@ -17,7 +17,7 @@ namespace StdBdgRCCL.Infrastructure
         private static string date = DateTime.Now.ToShortDateString();
         private static DateTime dateOnly = Convert.ToDateTime(date);
 
-        #region IC /studentEnrollments
+        #region IC studentEnrollments
         public async Task RunEdfiOdsSync(ICStudentEnrollment icStudentEnrollment)
         {
             string icStdNumber = icStudentEnrollment.StudentNumber.ToString();
@@ -169,7 +169,7 @@ namespace StdBdgRCCL.Infrastructure
                     _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                     LoggerLQ.LogQueue($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
-                if (calendar.Content != null)
+                if (calendar.ResponseContent != null)
                 {
                     if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
                     {
@@ -186,7 +186,7 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
-                    //LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
             }
 
@@ -195,7 +195,7 @@ namespace StdBdgRCCL.Infrastructure
             if (!badgeStudentResponse.IsSuccessStatusCode)
             {
                 _logger.LogInformation($"Failure in badge student request {edfiStudUniqueId}");
-                //LoggerLQ.LogQueue("Failure in badge student request.", edfiStudUniqueId);
+                LoggerLQ.LogQueue($"Failure in badge student request {edfiStudUniqueId}");
                 return;
             }
             BadgeStudent badgeStudent = badgeStudentResponse.ResponseContent;
@@ -455,12 +455,12 @@ namespace StdBdgRCCL.Infrastructure
                     if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
                     {
                         DateTime nYr = DateTime.Now.AddYears(1);
-                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + "" + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Q3" || quarter.Item1 == "Q4")
                     {
                         DateTime lYr = DateTime.Now.AddYears(-1);
-                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "" + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Outside of school year") { _logger.LogInformation($"Quarter invlaid - Outside of school year"); }
                 }
@@ -564,23 +564,6 @@ namespace StdBdgRCCL.Infrastructure
         }
         #endregion
 
-        public async Task<HttpResponse<BadgeStudent>> GetBadgeStudentAsync(string studentId)
-        {
-            var badgeStudentResponse = await _athen.GetBadgeSystemStudentById(studentId);
-            if (!badgeStudentResponse.IsSuccessStatusCode)
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = false };
-            }
-            if (badgeStudentResponse.ResponseContent.Count == 0)
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = null };
-            }
-            else
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = badgeStudentResponse.ResponseContent[0] };
-            }
-        }
-
         public async Task BadgeCRUD(ICStudentEnrollment icStudentEnrollment, BadgeStudent badgeStudent, StudentSchoolAssociation edfiSSA, string edfiStudUniqueId, EdfiEnrollmentSchool activeEdFiEnrollmentSchool,
                                     string enrollmentSchoolIDCode, EdfiEnrollmentStudent edfiV3EnrollmentStudent, string edfiGradeLevel, string homeroomCode, string servType, string calendar)
         {
@@ -672,7 +655,9 @@ namespace StdBdgRCCL.Infrastructure
 
                     if (prevMifareCard != badgeStudent.MifareCardNumber)
                     {
+                        LoggerLQ.LogQueue($"MifareCardNumber has changed for badge student {badgeStudent.StudentId}; setting IssueDate to {dateOnly}");
                         badgeStudent.IssueDate = dateOnly;
+                        badgeStudent.PrevMifareCardNum = badgeStudent.MifareCardNumber;
                     }
 
                     if (string.IsNullOrEmpty(badgeStudent.MifareCardNumber) && badgeStudent.Expiration == null)
@@ -968,6 +953,10 @@ namespace StdBdgRCCL.Infrastructure
                             }
                         }
                     }
+                    else
+                    {
+                        _logger.LogInformation($"0 items in IC enrollment change batch");
+                    }
                     batchNumber++;
                     offset += icEnrChangeList.Count;
                     if(icEnrChangeList.Count == 0)
@@ -978,7 +967,7 @@ namespace StdBdgRCCL.Infrastructure
                 if (typeOfSync == TypeOfSync.SingleEnrStudent)
                 {
                     //GET SINGLE IC STUDENT ENR
-                    HttpResponse<ICStudentEnrollment> icStdEnrollmentResult = new HttpResponse<ICStudentEnrollment>();
+                    HttpResponse<List<ICStudentEnrollment>> icStdEnrollmentResult = new HttpResponse<List<ICStudentEnrollment>>();
                     _logger.LogInformation($"Getting next IC student enrollment {today}, offset {offset}");
                     icStdEnrollmentResult = await _athen.GetICStudentEnrollmentByStudentNumber(studUniqId);
                     if (!icStdEnrollmentResult.IsSuccessStatusCode)
@@ -987,9 +976,21 @@ namespace StdBdgRCCL.Infrastructure
                         LoggerLQ.LogQueue($"Failed getting next IC student enrollment {studUniqId} on offset {offset}");
                         break;
                     }
-                    ICStudentEnrollment icStdEnrmt = icStdEnrollmentResult.ResponseContent;
-                    var result = RunEdfiOdsSync(icStdEnrmt);
-                    tasks.Add(result);
+                    List<ICStudentEnrollment> icStdEnrmts = icStdEnrollmentResult.ResponseContent;
+                    foreach (var item in icStdEnrmts)
+                    {
+                        var result = RunEdfiOdsSync(item);
+                        tasks.Add(result);
+                        if (result != null)
+                        {
+                            tasks.Add(result);
+                        }
+                        else
+                        {
+                            _logger.LogInformation($"Null result at RunEdfiOdsSync()");
+                            LoggerLQ.LogQueue($"Null result at RunEdfiOdsSync()");
+                        }
+                    }
                     isFinished = true; 
                 }
 
