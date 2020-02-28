@@ -15,13 +15,15 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
     public class ICClientBase : IICClient
     {
         private readonly HttpClient _icClient;
+        private readonly IHttpClientFactory _httpClientFactory;
         private const string _clientName = "ICClient";
         private const string _className = "ICClientBase";
         public ICClientBase(HttpClient client)
         {
+            //_httpClientFactory = clientFactory;
             _icClient = client;
         }
-
+        
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int pagesize = 1000, IDictionary<string, string> properties = null)
         {
             const string _functionName = "Get<T>()";

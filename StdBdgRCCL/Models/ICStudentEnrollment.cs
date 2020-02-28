@@ -44,7 +44,7 @@ namespace StdBdgRCCL.Models
         public string SchoolName { get; set; }
 
         [JsonProperty("localSchoolNumber")]
-        public long LocalSchoolNumber { get; set; }
+        public string LocalSchoolNumber { get; set; }
 
         [JsonProperty("stateSchoolNumber")]
         public string StateSchoolNumber { get; set; }

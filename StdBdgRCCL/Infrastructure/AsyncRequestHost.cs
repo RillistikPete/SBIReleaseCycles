@@ -4,23 +4,27 @@ using StdBdgRCCL.Models;
 using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure
 {
-    public class AsyncRequestHost
+    public class AsyncRequestHost : DelegatingHandler
     {
         private const string _className = "AsyncRequestHost";
+        private static CancellationToken cancellationToken;
 
         public static async Task<HttpResponse<List<T>>> SendRequestForListAsync<T>(HttpRequestMessage request, HttpClient client, string exceptionClientName)
         {
             const string _functionName = "SendRequestForListAsync<T>()";
             try
             {
+                //var response = await SendAsync(request, cancellationToken);
                 var response = await ExecuteSendRequestAsync(request, client);
                 if (response.IsSuccessStatusCode)
                 {
@@ -35,8 +39,8 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"{_functionName}: Request failed - {request}  \r\n { _className} at { _functionName}");
-                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {request}  \r\n { _className} at { _functionName}");
+                    Console.WriteLine($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
+                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri} \r\n { _className}: {response.RequestMessage}");
                     List<T> jsonResponse = new List<T>();
                     //var repoResponse = new HttpResponse<List<T>>(true, response.Content.ReadAsStringAsync().Result, jsonResponse);
                     var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
@@ -90,8 +94,8 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"{_functionName}: Request failed - {request}  \r\n { _className} at { _functionName}");
-                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {request}  \r\n { _className} at { _functionName}");
+                    Console.WriteLine($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
+                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
                     return new HttpResponse<T> { IsSuccess = true, StatusCode = HttpStatusCode.BadRequest };
                 }
             }
@@ -132,50 +136,13 @@ namespace StdBdgRCCL.Infrastructure
             const string _functionName = "ExecuteSendRequestAsync()";
             try
             {
-                var httpRetryPolicy = Policy<HttpResponseMessage>
-                .Handle<HttpRequestException>()
-                .OrResult(result => !result.IsSuccessStatusCode)
-                .WaitAndRetryAsync(3, i => TimeSpan.FromSeconds(2), async (responseMessage, timeSpan, retryCount, context) =>
-                {
-                    var requestContent = responseMessage.Result.RequestMessage.Content != null ? await responseMessage.Result.RequestMessage.Content.ReadAsStringAsync() : "";
-                    Console.WriteLine(requestContent);
-                    var responseContent = await responseMessage.Result.Content.ReadAsStringAsync();
-                    Console.WriteLine(responseContent);
-                    if (retryCount == 3) { }
-                    Console.WriteLine($"{_functionName} - Request unsuccessful: {client.BaseAddress} \r\n" +
-                                        $" [[{request}]] \r\n" +
-                                        $"Waiting {timeSpan} before next retry. Retry attempt {retryCount}");
-                });
-
-                var httpFallbackPolicy = Policy<HttpResponseMessage>
-                    .Handle<HttpRequestException>()
-                    .OrResult(result => !result.IsSuccessStatusCode)
-                    .FallbackAsync(async fallback =>
-                    {
-                        if (request.Properties.ContainsKey("studentUniqueId"))
-                        {
-                            return new HttpResponseMessage()
-                            {
-                                StatusCode = HttpStatusCode.BadRequest,
-                                Content = new StringContent("Fallback policy used, studentUniqueId queued for retry")
-                            };
-                        }
-                        else
-                        {
-                            return new HttpResponseMessage()
-                            {
-                                StatusCode = HttpStatusCode.BadRequest,
-                                Content = new StringContent("Fallback policy used.")
-                            };
-                        }
-                    });
-
-                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(GetNewRequestMessage(request)));
+                var response = await client.SendAsync(request);
                 return response;
             }
-            catch (WebException ex)
+            catch (WebException exc)
             {
-                throw ex;
+                Console.WriteLine($"Exception in {_functionName}: {exc.Message}");
+                throw exc;
             }
         }
 
@@ -193,6 +160,15 @@ namespace StdBdgRCCL.Infrastructure
                     newRequest.Properties.Add(prop.Key, prop.Value);
             }
             return newRequest;
+        }
+        
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage reqMsg, CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            //var policy = Policy
+            var response = await base.SendAsync(reqMsg, cancellationToken);
+            Console.WriteLine($"Completed request in {sw.ElapsedMilliseconds}ms.");
+            return response;
         }
     }
 }
