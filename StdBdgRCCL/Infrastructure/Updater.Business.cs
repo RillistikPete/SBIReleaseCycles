@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace StdBdgRCCL.Infrastructure
+namespace StdBdgRCCL
 {
     public partial class Updater
     {
@@ -17,7 +17,7 @@ namespace StdBdgRCCL.Infrastructure
         private static string date = DateTime.Now.ToShortDateString();
         private static DateTime dateOnly = Convert.ToDateTime(date);
 
-        #region IC /studentEnrollments
+        #region IC studentEnrollments
         public async Task RunEdfiOdsSync(ICStudentEnrollment icStudentEnrollment)
         {
             string icStdNumber = icStudentEnrollment.StudentNumber.ToString();
@@ -34,7 +34,7 @@ namespace StdBdgRCCL.Infrastructure
             var edfiStudentId = edfiEnrollmentStudent.Id;
             //-----------------------------------------------------------------------------------------
 
-            //Get StudentSchoolAssociations for enrollment/schools schoolId
+            //Get StudentSchoolAssociations for enrollment / schools schoolId
             IDictionary<string, string> stdAssociationsRequestProperties = new Dictionary<string, string>()
             {
                 { "studentUniqueId", edfiStudUniqueId }
@@ -42,8 +42,8 @@ namespace StdBdgRCCL.Infrastructure
             HttpResponse<List<StudentSchoolAssociation>> edfiSSAResponse = await _athen.GetStudentSchoolAssociationsByStudentUniqueId(edfiStudUniqueId, stdAssociationsRequestProperties);
             if (!edfiSSAResponse.IsSuccessStatusCode)
             {
-                _logger.LogInformation($"Failed getting V3StudentSchoolAssociation for student { edfiStudUniqueId }");
-                LoggerLQ.LogQueue($"Failed getting V3StudentSchoolAssociation for student {edfiStudUniqueId}");
+                _logger.LogInformation($"Failed getting StudentSchoolAssociation for student { edfiStudUniqueId }");
+                LoggerLQ.LogQueue($"Failed getting StudentSchoolAssociation for student {edfiStudUniqueId}");
                 return;
             }
             List<StudentSchoolAssociation> listOfEdfiStudentSchoolAssociations = edfiSSAResponse.ResponseContent;
@@ -51,6 +51,7 @@ namespace StdBdgRCCL.Infrastructure
             List<StudentSchoolAssociation> activeSSAList = new List<StudentSchoolAssociation>();
             List<StudentSchoolAssociation> ssaWithdrawals = new List<StudentSchoolAssociation>();
             StudentSchoolAssociation activeSSA = new StudentSchoolAssociation();
+            StudentSchoolAssociation activeSecondarySSA = new StudentSchoolAssociation();
             StudentSchoolAssociation ssaWithdrawal = new StudentSchoolAssociation();
             foreach (var ssa in listOfEdfiStudentSchoolAssociations)
             {
@@ -58,22 +59,27 @@ namespace StdBdgRCCL.Infrastructure
                 else if (!string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { ssaWithdrawals.Add(ssa); }
             }
 
+            //===========Get active primary school enrollment===================
+            string schoolCode2 = "";
             if (activeSSAList.Count > 0)
             {
                 activeSSA = activeSSAList[0];
                 if (activeSSAList.Count > 1)
                 {
-                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing latest date");
-                    List<DateTime> dList = new List<DateTime>();
-                    foreach (var date in activeSSAList)
+                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing ordinally.");
+                    if (activeSSAList.Exists(x => x.PrimarySchool == false))
                     {
-                        var enDateTime = DateTime.Parse(date.EntryDate);
-                        dList.Add(enDateTime);
+                        var secondary = activeSSAList.Where(x => x.PrimarySchool == false).FirstOrDefault();
+                        if(secondary.CalendarReference.CalendarCode == icStudentEnrollment.CalendarId.ToString())
+                        {
+                            _logger.LogInformation($"Setting schoolCode2 to IC stud enrollment localSchoolNumber {icStudentEnrollment.LocalSchoolNumber}");
+                            schoolCode2 = icStudentEnrollment.LocalSchoolNumber;
+                        }
                     }
-                    string dT = dList.Max().ToString("yyyy-MM-dd");
-                    activeSSA = activeSSAList.Where(x => x.EntryDate == dT).FirstOrDefault();
+                    activeSSA = activeSSAList.Where(x => x.PrimarySchool == true).FirstOrDefault();
                 }
             }
+            //=========Choose from school withdrawals by latest date===============
             if (ssaWithdrawals.Count > 0)
             {
                 ssaWithdrawal = ssaWithdrawals[0];
@@ -90,7 +96,6 @@ namespace StdBdgRCCL.Infrastructure
                     ssaWithdrawal = ssaWithdrawals.Where(x => x.ExitWithdrawDate == dT).FirstOrDefault();
                 }
             }
-            // Set edfiSSA to active School Association or SSA with latest withdrawal date
             var edfiSSA = activeSSA;
 
             if (activeSSAList.Count == 0 || activeSSA == null)
@@ -105,10 +110,10 @@ namespace StdBdgRCCL.Infrastructure
 
             //ServType
             string servType = "";
-            if (activeSSA != null)
+            if (edfiSSA != null)
             {
-                if (edfiSSA.PrimarySchool == true) { servType = "P"; }
-                else { servType = "S"; }
+                if (edfiSSA.PrimarySchool == false || icStudentEnrollment.EnrollmentType == "SECONDARY") { servType = "S"; }
+                else if (edfiSSA.PrimarySchool == true || icStudentEnrollment.EnrollmentType == "PRIMARY") { servType = "P"; }
             }
 
             //Get grade level
@@ -149,7 +154,7 @@ namespace StdBdgRCCL.Infrastructure
                     else
                     {
                         enrollmentSchoolIDCode = null;
-                        _logger.LogInformation($"No LEA ID Code for enrollment school <{activeEdfiEnrollmentSchool.NameOfInstitution}> - studentId {edfiStudUniqueId}");
+                        _logger.LogInformation($"No LEA ID Code for primary enrollment school <{activeEdfiEnrollmentSchool.NameOfInstitution}> - studentId {edfiStudUniqueId}");
                     }
                 }
                 else
@@ -169,24 +174,24 @@ namespace StdBdgRCCL.Infrastructure
                     _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                     LoggerLQ.LogQueue($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
-                if (calendar.Content != null)
+                if (calendar.ResponseContent != null)
                 {
                     if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
                     {
                         DateTime nYr = DateTime.Now.AddYears(1);
-                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + " " + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Q3" || quarter.Item1 == "Q4")
                     {
                         DateTime lYr = DateTime.Now.AddYears(-1);
-                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + " " + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Outside of school year") { _logger.LogInformation($"Quarter invlaid - Outside of school year"); }
                 }
                 else
                 {
                     _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
-                    //LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
             }
 
@@ -195,11 +200,10 @@ namespace StdBdgRCCL.Infrastructure
             if (!badgeStudentResponse.IsSuccessStatusCode)
             {
                 _logger.LogInformation($"Failure in badge student request {edfiStudUniqueId}");
-                //LoggerLQ.LogQueue("Failure in badge student request.", edfiStudUniqueId);
+                LoggerLQ.LogQueue($"Failure in badge student request {edfiStudUniqueId}");
                 return;
             }
             BadgeStudent badgeStudent = badgeStudentResponse.ResponseContent;
-
             //-----------------------------------------------------------------------------------------
             //-----------------------------------------------------------------------------------------
             //Use edfiSSA (active) to find Location by schoolId (Phase 2 Implementation Jan2020)
@@ -280,7 +284,7 @@ namespace StdBdgRCCL.Infrastructure
                 }
             }
 
-            await BadgeCRUD(icStudentEnrollment, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
+            await BadgeCRUD(icStudentEnrollment, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, schoolCode2, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
         }
         #endregion
 
@@ -339,22 +343,43 @@ namespace StdBdgRCCL.Infrastructure
                 else if (!string.IsNullOrEmpty(ssa.ExitWithdrawDate)) { ssaWithdrawals.Add(ssa); }
             }
 
+            //if (activeSSAList.Count > 0)
+            //{
+            //    activeSSA = activeSSAList[0];
+            //    if (activeSSAList.Count > 1)
+            //    {
+            //        _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing latest date");
+            //        List<DateTime> dList = new List<DateTime>();
+            //        foreach (var date in activeSSAList)
+            //        {
+            //            var enDateTime = DateTime.Parse(date.EntryDate);
+            //            dList.Add(enDateTime);
+            //        }
+            //        string dT = dList.Max().ToString("yyyy-MM-dd");
+            //        activeSSA = activeSSAList.Where(x => x.EntryDate == dT).FirstOrDefault();
+            //    }
+            //}
+            //===========Get active primary school enrollment===================
+            string schoolCode2 = "";
             if (activeSSAList.Count > 0)
             {
                 activeSSA = activeSSAList[0];
                 if (activeSSAList.Count > 1)
                 {
-                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing latest date");
-                    List<DateTime> dList = new List<DateTime>();
-                    foreach (var date in activeSSAList)
+                    _logger.LogInformation($"Multiple active enrollments for student {edfiStudUniqueId} - choosing ordinally.");
+                    if (activeSSAList.Exists(x => x.PrimarySchool == false))
                     {
-                        var enDateTime = DateTime.Parse(date.EntryDate);
-                        dList.Add(enDateTime);
+                        var secondary = activeSSAList.Where(x => x.PrimarySchool == false).FirstOrDefault();
+                        if (secondary.CalendarReference.CalendarCode == icStudentEnrollmt.CalendarId.ToString())
+                        {
+                            _logger.LogInformation($"Setting schoolCode2 to IC stud enrollment localSchoolNumber {icStudentEnrollmt.LocalSchoolNumber}");
+                            schoolCode2 = icStudentEnrollmt.LocalSchoolNumber;
+                        }
                     }
-                    string dT = dList.Max().ToString("yyyy-MM-dd");
-                    activeSSA = activeSSAList.Where(x => x.EntryDate == dT).FirstOrDefault();
+                    activeSSA = activeSSAList.Where(x => x.PrimarySchool == true).FirstOrDefault();
                 }
             }
+            //=========Choose from school withdrawals by latest date===============
             if (ssaWithdrawals.Count > 0)
             {
                 ssaWithdrawal = ssaWithdrawals[0];
@@ -371,7 +396,6 @@ namespace StdBdgRCCL.Infrastructure
                     ssaWithdrawal = ssaWithdrawals.Where(x => x.ExitWithdrawDate == dT).FirstOrDefault();
                 }
             }
-            // Set edfiSSA to active School Association or SSA with latest withdrawal date
             var edfiSSA = activeSSA;
 
             if (activeSSAList.Count == 0 || activeSSA == null)
@@ -450,24 +474,24 @@ namespace StdBdgRCCL.Infrastructure
                     _logger.LogInformation($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                     LoggerLQ.LogQueue($"Request failure at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
-                if (calendar.Content != null)
+                if (calendar.ResponseContent != null)
                 {
                     if (quarter.Item1 == "Q1" || quarter.Item1 == "Q2")
                     {
                         DateTime nYr = DateTime.Now.AddYears(1);
-                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + "-" + nYr.Year.ToString().Substring(2) + " " + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Q3" || quarter.Item1 == "Q4")
                     {
                         DateTime lYr = DateTime.Now.AddYears(-1);
-                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + activeEdfiEnrollmentSchool.NameOfInstitution;
+                        calendarYr = lYr.Year.ToString().Substring(2) + "-" + calendar.ResponseContent.SchoolYearTypeReference?.SchoolYear.ToString().Substring(2) + " " + activeEdfiEnrollmentSchool.NameOfInstitution;
                     }
                     else if (quarter.Item1 == "Outside of school year") { _logger.LogInformation($"Quarter invlaid - Outside of school year"); }
                 }
                 else
                 {
                     _logger.LogInformation($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
-                    //LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
+                    LoggerLQ.LogQueue($"Null calendar.Content at GetCalendarBySchoolId({edfiSSA.SchoolReference.SchoolId})");
                 }
             }
 
@@ -560,29 +584,12 @@ namespace StdBdgRCCL.Infrastructure
                 }
             }
 
-            await BadgeCRUD(icStudentEnrollmt, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
+            await BadgeCRUD(icStudentEnrollmt, badgeStudent, edfiSSA, edfiStudUniqueId, activeEdfiEnrollmentSchool, enrollmentSchoolIDCode, schoolCode2, edfiEnrollmentStudent, edfiGradeLevel, homeroomCode, servType, calendarYr);
         }
         #endregion
 
-        public async Task<HttpResponse<BadgeStudent>> GetBadgeStudentAsync(string studentId)
-        {
-            var badgeStudentResponse = await _athen.GetBadgeSystemStudentById(studentId);
-            if (!badgeStudentResponse.IsSuccessStatusCode)
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = false };
-            }
-            if (badgeStudentResponse.ResponseContent.Count == 0)
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = null };
-            }
-            else
-            {
-                return new HttpResponse<BadgeStudent> { IsSuccess = true, ResponseContent = badgeStudentResponse.ResponseContent[0] };
-            }
-        }
-
         public async Task BadgeCRUD(ICStudentEnrollment icStudentEnrollment, BadgeStudent badgeStudent, StudentSchoolAssociation edfiSSA, string edfiStudUniqueId, EdfiEnrollmentSchool activeEdFiEnrollmentSchool,
-                                    string enrollmentSchoolIDCode, EdfiEnrollmentStudent edfiV3EnrollmentStudent, string edfiGradeLevel, string homeroomCode, string servType, string calendar)
+                                    string enrollmentSchoolIDCode, string schoolCode2, EdfiEnrollmentStudent edfiV3EnrollmentStudent, string edfiGradeLevel, string homeroomCode, string servType, string calendar)
         {
             //Try update
             if (badgeStudent != null && activeEdFiEnrollmentSchool != null)
@@ -592,6 +599,7 @@ namespace StdBdgRCCL.Infrastructure
                                       badgeStudent.MiddleName?.ToUpper() +
                                       badgeStudent.BirthDate?.ToString() +
                                       badgeStudent.SchoolNumber +
+                                      badgeStudent.SchoolCode2 +
                                       badgeStudent.SchoolName?.ToUpper() +
                                       badgeStudent.Grade +
                                       badgeStudent.Homeroom?.ToUpper() +
@@ -605,6 +613,7 @@ namespace StdBdgRCCL.Infrastructure
                                                                edfiV3EnrollmentStudent.MiddleName.ToUpper() +
                                                                edfiV3EnrollmentStudent.BirthDate.ToString() +
                                                                enrollmentSchoolIDCode +
+                                                               schoolCode2 + 
                                                                activeEdFiEnrollmentSchool.NameOfInstitution.ToUpper() +
                                                                edfiGradeLevel +
                                                                homeroomCode.ToUpper() +
@@ -630,6 +639,10 @@ namespace StdBdgRCCL.Infrastructure
                         badgeStudent.Expiredate = Convert.ToDateTime(edfiSSA.ExitWithdrawDate);
                     }
                     badgeStudent.SchoolNumber = enrollmentSchoolIDCode ?? "";
+                    if(!string.IsNullOrEmpty(schoolCode2) && !string.IsNullOrWhiteSpace(schoolCode2))
+                    {
+                        badgeStudent.SchoolCode2 = schoolCode2;
+                    }
                     badgeStudent.SchoolName = activeEdFiEnrollmentSchool.NameOfInstitution ?? "";
                     badgeStudent.Grade = edfiGradeLevel;
                     badgeStudent.Homeroom = homeroomCode;
@@ -672,7 +685,9 @@ namespace StdBdgRCCL.Infrastructure
 
                     if (prevMifareCard != badgeStudent.MifareCardNumber)
                     {
+                        LoggerLQ.LogQueue($"MifareCardNumber has changed for badge student {badgeStudent.StudentId}; setting IssueDate to {dateOnly}");
                         badgeStudent.IssueDate = dateOnly;
+                        badgeStudent.PrevMifareCardNum = badgeStudent.MifareCardNumber;
                     }
 
                     if (string.IsNullOrEmpty(badgeStudent.MifareCardNumber) && badgeStudent.Expiration == null)
@@ -904,6 +919,7 @@ namespace StdBdgRCCL.Infrastructure
             }
             //-----------------------------------------------------------------------------------------
             _logger.LogInformation($"{edfiStudUniqueId} up to date");
+            LoggerLQ.LogQueue($"{edfiStudUniqueId} up to date");
         }
 
 
@@ -911,7 +927,7 @@ namespace StdBdgRCCL.Infrastructure
         public async Task UpdateStudentsFromIC(TypeOfSync typeOfSync)
         {
             string today = DateTime.Now.ToShortDateString();
-            string studUniqId = "190313636";
+            string studUniqId = "190314220";
             int pagesize = 1000;
             int offset = 0;
             const int limit = 100;
@@ -968,6 +984,10 @@ namespace StdBdgRCCL.Infrastructure
                             }
                         }
                     }
+                    else
+                    {
+                        _logger.LogInformation($"0 items in IC enrollment change batch");
+                    }
                     batchNumber++;
                     offset += icEnrChangeList.Count;
                     if(icEnrChangeList.Count == 0)
@@ -978,8 +998,8 @@ namespace StdBdgRCCL.Infrastructure
                 if (typeOfSync == TypeOfSync.SingleEnrStudent)
                 {
                     //GET SINGLE IC STUDENT ENR
-                    HttpResponse<ICStudentEnrollment> icStdEnrollmentResult = new HttpResponse<ICStudentEnrollment>();
-                    _logger.LogInformation($"Getting next IC student enrollment {today}, offset {offset}");
+                    HttpResponse<List<ICStudentEnrollment>> icStdEnrollmentResult = new HttpResponse<List<ICStudentEnrollment>>();
+                    _logger.LogInformation($"Getting IC student enrollment for {studUniqId}");
                     icStdEnrollmentResult = await _athen.GetICStudentEnrollmentByStudentNumber(studUniqId);
                     if (!icStdEnrollmentResult.IsSuccessStatusCode)
                     {
@@ -987,9 +1007,23 @@ namespace StdBdgRCCL.Infrastructure
                         LoggerLQ.LogQueue($"Failed getting next IC student enrollment {studUniqId} on offset {offset}");
                         break;
                     }
-                    ICStudentEnrollment icStdEnrmt = icStdEnrollmentResult.ResponseContent;
-                    var result = RunEdfiOdsSync(icStdEnrmt);
-                    tasks.Add(result);
+                    List<ICStudentEnrollment> icStdEnrmts = icStdEnrollmentResult.ResponseContent;
+                    //var result = RunEdfiOdsSync(icStdEnrmts[0]);
+                    //tasks.Add(result);
+                    foreach (var item in icStdEnrmts)
+                    {
+                        var result = RunEdfiOdsSync(item);
+                        tasks.Add(result);
+                        if (result != null)
+                        {
+                            tasks.Add(result);
+                        }
+                        else
+                        {
+                            _logger.LogInformation($"Null result at RunEdfiOdsSync()");
+                            LoggerLQ.LogQueue($"Null result at RunEdfiOdsSync()");
+                        }
+                    }
                     isFinished = true; 
                 }
 

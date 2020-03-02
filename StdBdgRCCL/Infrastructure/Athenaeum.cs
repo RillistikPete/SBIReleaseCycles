@@ -22,15 +22,14 @@ namespace StdBdgRCCL.Infrastructure
 
 
         #region Implementation
-
         public async Task<HttpResponse<List<ICEnrollmentChange>>> GetICEnrollmentChanges(int offset, int pagesize)
         {
             return await _icClient.GetByExample<ICEnrollmentChange>($"enrollment-changes?offset={offset}&pagesize={pagesize}");
         }
 
-        public async Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByStudentNumber(string studentId)
+        public async Task<HttpResponse<List<ICStudentEnrollment>>> GetICStudentEnrollmentByStudentNumber(string studentId)
         {
-            return await _icClient.GetSingleByExample<ICStudentEnrollment>($"studentEnrollments?sysfilter=equal(studentNumber: \"{studentId}\") ", null);
+            return await _icClient.GetByExample<ICStudentEnrollment>($"studentEnrollments?sysfilter=equal(studentNumber: \"{studentId}\") ", null);
         }
 
         public async Task<HttpResponse<ICStudentEnrollment>> GetICStudentEnrollmentByPersonId(string personID)
@@ -79,7 +78,6 @@ namespace StdBdgRCCL.Infrastructure
         #endregion
 
         #region CRUD
-
         public async Task<ServerResponse> UpdateStudentBadge(string id, BadgeStudent dto)
         {
             return await _badgeClient.Put("studentBadges/", id, dto);

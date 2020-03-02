@@ -10,12 +10,5 @@ namespace StdBdgRCCL.Models
         public bool IsSuccess { get; set; }
         public string Message { get; set; }
         public T ResponseContent { get; set; }
-
-        //public HttpResponse(bool statusCode, string message, T responseContent)
-        //{
-        //    IsSuccess = statusCode;
-        //    Message = message;
-        //    ResponseContent = responseContent;
-        //}
     }
 }

@@ -43,9 +43,5 @@ namespace StdBdgRCCL.Models
 
     public partial class SchoolYearTypeReference
     {
-        [JsonProperty("schoolYear")]
-        public long SchoolYear { get; set; }
-        [JsonProperty("link")]
-        public Link Link { get; set; }
     }
 }

@@ -65,22 +65,12 @@ namespace StdBdgRCCL.Interfaces
         Task<HttpResponse<T>> GetSingle<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new();
 
         /// <summary>
-        /// Send a GET request and get all available records.
-        /// </summary>
-        /// <typeparam name="T">Resource Model</typeparam>
-        /// <param name="resourceUri">Resource Endpoint URI</param>
-        /// <param name="offset">Number of records to skip</param>
-        /// <param name="limit">Record limit</param>
-        /// <returns>List of records with model specified in Type</returns>
-        Task<List<T>> GetAll<T>(string resourceUri, int offset = 0, int limit = 100, IDictionary<string, string> properties = null);
-
-        /// <summary>
         /// Send a PUT request
         /// </summary>
         /// <param name="resourceUri">Resource Endpoint URI</param>
         /// <param name="id">Record Id to send request to</param>
         /// <param name="dto">Data Transfer Object to send with the request</param>
         /// <returns></returns>
-        Task<HttpResponseMessage> Put(string resourceUri, string id, dynamic dto);
+        Task<ServerResponse> Put(string resourceUri, string id, dynamic dto);
     }
 }

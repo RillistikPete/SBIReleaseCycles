@@ -4,25 +4,28 @@ using StdBdgRCCL.Models;
 using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StdBdgRCCL.Infrastructure
 {
-    public class AsyncRequestHost
+    public class AsyncRequestHost : DelegatingHandler
     {
         private const string _className = "AsyncRequestHost";
+        private static CancellationToken cancellationToken;
 
         public static async Task<HttpResponse<List<T>>> SendRequestForListAsync<T>(HttpRequestMessage request, HttpClient client, string exceptionClientName)
         {
-            const string _functionName = "SendRequestForListAsync<T>";
+            const string _functionName = "SendRequestForListAsync<T>()";
             try
             {
+                //var response = await SendAsync(request, cancellationToken);
                 var response = await ExecuteSendRequestAsync(request, client);
-                
                 if (response.IsSuccessStatusCode)
                 {
                     List<T> jsonResponse = new List<T>();
@@ -36,10 +39,8 @@ namespace StdBdgRCCL.Infrastructure
                 else
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    LoggerLQ.LogQueue($"Request failed - [[{request}]] \r\n" +
-                                        $"{response.Headers} \r\n" +
-                                        $"{responseContent}");
-
+                    Console.WriteLine($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
+                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri} \r\n { _className}: {response.RequestMessage}");
                     List<T> jsonResponse = new List<T>();
                     //var repoResponse = new HttpResponse<List<T>>(true, response.Content.ReadAsStringAsync().Result, jsonResponse);
                     var repoResponse = new HttpResponse<List<T>> { IsSuccess = true, ResponseContent = jsonResponse };
@@ -48,6 +49,7 @@ namespace StdBdgRCCL.Infrastructure
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Exception in {_className} - {_functionName}. {exceptionClientName}. Exception: {ex.Message}");
                 LoggerLQ.LogQueue($"Exception in {_className} - {_functionName}. {exceptionClientName}. Exception: {ex.Message}");
                 List<T> jsonResponse = new List<T>();
                 //var repoResponse = new HttpResponse<List<T>>(true, null, jsonResponse);
@@ -58,13 +60,14 @@ namespace StdBdgRCCL.Infrastructure
 
         public static async Task<HttpResponse<T>> SendRequestAsync<T>(HttpRequestMessage request, HttpClient client, string exceptionClientName) where T : new()
         {
-            const string _functionName = "SendRequestAsync<T>";
+            const string _functionName = "SendRequestAsync<T>()";
             try
             {
                 var response = await ExecuteSendRequestAsync(request, client);
                 if (response.IsSuccessStatusCode)
                 {
                     T jsonResponse = new T();
+                    //List<T> jrList = new List<T>();
                     var settings = new JsonSerializerSettings
                     {
                         DateParseHandling = DateParseHandling.DateTimeOffset,
@@ -83,104 +86,63 @@ namespace StdBdgRCCL.Infrastructure
                     {
                         JsonConvert.PopulateObject(jRslt, jsonResponse);
                     }
-                    var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
-                    return repoResponse;
+                    return new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
+                    //JsonConvert.PopulateObject(jRslt, jsonResponse);
+                    //JsonConvert.PopulateObject(jRslt, jrList);
+                    //return new HttpResponse<T> { IsSuccess = true, ResponseContent = jrList[0] != null ? jrList[0] : jrList[1] };
                 }
                 else
                 {
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    LoggerLQ.LogQueue($"Request failed - [[{request}]] \r\n" +
-                                        $"{response.Headers} \r\n" +
-                                        $"{responseContent}");
-
-                    T jsonResponse = new T();
-                    var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
-
-                    return repoResponse;
+                    Console.WriteLine($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
+                    LoggerLQ.LogQueue($"{_functionName}: Request failed - {client.BaseAddress}/{request.RequestUri}  \r\n { _className}: {response.RequestMessage}");
+                    return new HttpResponse<T> { IsSuccess = true, StatusCode = HttpStatusCode.BadRequest };
                 }
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Exception in {_className} - {_functionName}. {exceptionClientName}. Exception: {ex.Message}");
-                Console.WriteLine($"Exception in {exceptionClientName}", $"{ex}");
-
-                T jsonResponse = new T();
-                var repoResponse = new HttpResponse<T> { IsSuccess = true, ResponseContent = jsonResponse };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}. Exception: {exc.Message}");
+                Console.WriteLine($"Exception in {_className} at {_functionName}. Exception: {exc.Message}");
+                return new HttpResponse<T> { IsSuccess = true, StatusCode = HttpStatusCode.BadRequest };
             }
         }
 
         public static async Task<ServerResponse> SendPropagateRequestAsync(HttpRequestMessage request, HttpClient client, string exceptionClientName)
         {
-            const string _functionName = "SendPropagateRequestAsync";
-            ServerResponse serverResponse = new ServerResponse();
+            const string _functionName = "SendPropagateRequestAsync()";
             try
             {
                 var response = await ExecuteSendRequestAsync(request, client);
-
-                serverResponse.HttpRespMsg = response;
-                serverResponse.Message = await response.Content.ReadAsStringAsync();
-                return serverResponse;
+                return new ServerResponse
+                {
+                    HttpRespMsg = response,
+                    Message = await response.Content.ReadAsStringAsync()
+                };
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Exception in {_className} - {_functionName}. {exceptionClientName}. Exception: {ex.Message}");
-
-                HttpResponseMessage response = new HttpResponseMessage { StatusCode = HttpStatusCode.BadRequest };
-                serverResponse.HttpRespMsg = response;
-                return serverResponse;
+                Console.WriteLine($"Exception in {_className} at {_functionName}. Exception: {exc.Message}");
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}. Exception: {exc.Message}");
+                return new ServerResponse
+                {
+                    HttpRespMsg = new HttpResponseMessage(HttpStatusCode.BadRequest),
+                    Message = $"Exception in {_className} at {_functionName}. Exception: {exc.Message}"
+                };
             }
         }
 
         public static async Task<HttpResponseMessage> ExecuteSendRequestAsync(HttpRequestMessage request, HttpClient client)
         {
-            const string _functionName = "SendPropagateRequestAsync";
+            const string _functionName = "ExecuteSendRequestAsync()";
             try
             {
-                var httpRetryPolicy = Policy<HttpResponseMessage>
-                .Handle<HttpRequestException>()
-                .OrResult(result => !result.IsSuccessStatusCode)
-                .WaitAndRetryAsync(3, i => TimeSpan.FromSeconds(2), async (responseMessage, timeSpan, retryCount, context) =>
-                {
-                    var requestContent = responseMessage.Result.RequestMessage.Content != null ? await responseMessage.Result.RequestMessage.Content.ReadAsStringAsync() : "";
-                    Console.WriteLine(requestContent);
-                    var responseContent = await responseMessage.Result.Content.ReadAsStringAsync();
-                    Console.WriteLine(responseContent);
-                    if (retryCount == 3) { }
-                    Console.WriteLine($"Request unsuccessful. [[{request}]]" +
-                                        $"{_functionName}- Waiting {timeSpan} before next retry. Retry attempt {retryCount}");
-                });
-
-                var httpFallbackPolicy = Policy<HttpResponseMessage>
-                    .Handle<HttpRequestException>()
-                    .OrResult(result => !result.IsSuccessStatusCode)
-                    .FallbackAsync(async fallback =>
-                    {
-                        if (request.Properties.ContainsKey("studentUniqueId"))
-                        {
-                            return new HttpResponseMessage()
-                            {
-                                StatusCode = HttpStatusCode.BadRequest,
-                                Content = new StringContent("Fallback policy used, studentUniqueId queued for retry")
-                            };
-                        }
-                        else
-                        {
-                            return new HttpResponseMessage()
-                            {
-                                StatusCode = HttpStatusCode.BadRequest,
-                                Content = new StringContent("Fallback policy used.")
-                            };
-                        }
-                    });
-
-                var response = await Policy.WrapAsync(httpFallbackPolicy, httpRetryPolicy).ExecuteAsync(() => client.SendAsync(GetNewRequestMessage(request)));
+                var response = await client.SendAsync(request);
                 return response;
             }
-            catch (WebException ex)
+            catch (WebException exc)
             {
-                throw ex;
+                Console.WriteLine($"Exception in {_functionName}: {exc.Message}");
+                throw exc;
             }
         }
 
@@ -198,6 +160,15 @@ namespace StdBdgRCCL.Infrastructure
                     newRequest.Properties.Add(prop.Key, prop.Value);
             }
             return newRequest;
+        }
+        
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage reqMsg, CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            //var policy = Policy
+            var response = await base.SendAsync(reqMsg, cancellationToken);
+            Console.WriteLine($"Completed request in {sw.ElapsedMilliseconds}ms.");
+            return response;
         }
     }
 }

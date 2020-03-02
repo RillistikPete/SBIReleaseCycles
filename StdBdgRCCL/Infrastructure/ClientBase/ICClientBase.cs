@@ -4,6 +4,7 @@ using StdBdgRCCL.Models;
 using StdBdgRCCL.Models.AzureDb;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -14,28 +15,50 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
     public class ICClientBase : IICClient
     {
         private readonly HttpClient _icClient;
+        private readonly IHttpClientFactory _httpClientFactory;
         private const string _clientName = "ICClient";
+        private const string _className = "ICClientBase";
         public ICClientBase(HttpClient client)
         {
+            //_httpClientFactory = clientFactory;
             _icClient = client;
         }
-
+        
         public async Task<HttpResponse<List<T>>> Get<T>(string resourceUri, int offset = 0, int pagesize = 1000, IDictionary<string, string> properties = null)
         {
-            var fullResourceUri = $"{resourceUri}?offset={offset}&pagesize={pagesize}";
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-            return await AsyncRequestHost.SendRequestForListAsync<T>(request, _icClient, _clientName);
+            const string _functionName = "Get<T>()";
+            try
+            {
+                var fullResourceUri = $"{resourceUri}?offset={offset}&pagesize={pagesize}";
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, _icClient, _clientName);
+            }
+            catch (Exception exc)
+            {
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<List<T>> { IsSuccess = false };
+            }
         }
 
         public async Task<HttpResponse<List<T>>> GetById<T>(string resourceUri, string id, IDictionary<string, string> properties = null)
         {
-            var fullResourceUri = $"{resourceUri}{id}";
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
-            return await AsyncRequestHost.SendRequestForListAsync<T>(request, _icClient, _clientName);
+            const string _functionName = "GetById<T>()";
+            try
+            {
+                var fullResourceUri = $"{resourceUri}{id}";
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, fullResourceUri);
+                return await AsyncRequestHost.SendRequestForListAsync<T>(request, _icClient, _clientName);
+            }
+            catch (Exception exc)
+            {
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<List<T>> { IsSuccess = false };
+            }
         }
 
         public async Task<HttpResponse<List<T>>> GetByExample<T>(string resourceUri, IDictionary<string, string> properties = null, int offset = 0, int pagesize = 100)
         {
+            const string _functionName = "GetByExample<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}&offset={offset}&pagesize={pagesize}";
@@ -49,15 +72,14 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
             }
             catch (Exception ex)
             {
-                LoggerLQ.LogQueue($"Get request failed in IC Client Base at GetByExample<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<List<T>> { IsSuccess= false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {ex.Message}");
+                return new HttpResponse<List<T>> { IsSuccess= false };
             }
         }
 
         public async Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new()
         {
+            const string _functionName = "GetSingleByExample<T>()";
             try
             {
                 var fullResourceUri = $"{resourceUri}";
@@ -69,72 +91,75 @@ namespace StdBdgRCCL.Infrastructure.ClientBase
                 }
                 return await AsyncRequestHost.SendRequestAsync<T>(request, _icClient, _clientName);
             }
-            catch (Exception ex)
+            catch (Exception exc)
             {
-                LoggerLQ.LogQueue($"Get request failed in IC Client Base at GetSingleByExample<T>, {_clientName} \r\n {ex.Message}");
-                var repoResponse = new HttpResponse<T> { IsSuccess = false };
-
-                return repoResponse;
+                LoggerLQ.LogQueue($"Exception in {_className} at {_functionName}, \r\n {exc.Message}");
+                return new HttpResponse<T> { IsSuccess = false };
             }
-        }
-
-
-        public async Task<List<T>> GetAll<T>(string resourceUri, int offset = 0, int pagesize = 1000, IDictionary<string, string> properties = null)
-        {
-            List<T> allRecords = new List<T>();
-            bool isFinished = false;
-            do
-            {
-                var fetch = await Get<T>(resourceUri, offset, pagesize);
-
-                if (fetch.ResponseContent.Count == pagesize + 1)
-                {
-                    fetch.ResponseContent.RemoveAt(pagesize);
-                    allRecords.AddRange(fetch.ResponseContent);
-                    offset += pagesize;
-                }
-                else
-                {
-                    allRecords.AddRange(fetch.ResponseContent);
-                    isFinished = true;
-                }
-            } while (!isFinished);
-
-            return allRecords;
         }
 
         public async Task<ServerResponse> Put(string resourceUri, string id, dynamic dto, IDictionary<string, string> properties = null)
         {
-            var json = JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
-
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, $"{resourceUri}{id}")
+            const string _functionName = "Put()";
+            try
             {
-                Content = new StringContent(json, Encoding.UTF8, "application/json"),
-            };
-
-            return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+                var json = JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Put, $"{resourceUri}{id}")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                };
+                return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+            }
+            catch (Exception exc)
+            {
+                return new ServerResponse
+                {
+                    HttpRespMsg = new HttpResponseMessage(HttpStatusCode.BadRequest),
+                    Message = $"Exception in {_className} at {_functionName}; {exc.Message}"
+                };
+            }
         }
 
         public async Task<ServerResponse> Delete(string resourceUri, string id, string checksum, IDictionary<string, string> properties = null)
         {
-            var fullResourceUri = $"{resourceUri}{id}?checksum={checksum}";
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Delete, fullResourceUri);
-            ServerResponse serverResponse = new ServerResponse();
-
-            return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+            const string _functionName = "Delete()";
+            try
+            {
+                var fullResourceUri = $"{resourceUri}{id}?checksum={checksum}";
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Delete, fullResourceUri);
+                return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+            }
+            catch (Exception exc)
+            {
+                return new ServerResponse
+                {
+                    HttpRespMsg = new HttpResponseMessage(HttpStatusCode.BadRequest),
+                    Message = $"Exception in {_className} at {_functionName}; {exc.Message}"
+                };
+            }
 
         }
 
         public async Task<ServerResponse> Post(string resourceUri, dynamic dto, IDictionary<string, string> properties = null)
         {
-            var fullResourceUri = $"{resourceUri}";
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, fullResourceUri)
+            const string _functionName = "Post()";
+            try
             {
-                Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
-            };
-            ServerResponse serverResponse = new ServerResponse();
-
-            return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+                var fullResourceUri = $"{resourceUri}";
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, fullResourceUri)
+                {
+                    Content = new StringContent(JsonConvert.SerializeObject(dto, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json")
+                };
+                return await AsyncRequestHost.SendPropagateRequestAsync(request, _icClient, _clientName);
+            }
+            catch (Exception exc)
+            {
+                return new ServerResponse
+                {
+                    HttpRespMsg = new HttpResponseMessage(HttpStatusCode.BadRequest),
+                    Message = $"Exception in {_className} at {_functionName}; {exc.Message}"
+                };
+            }
         }
     }
 }

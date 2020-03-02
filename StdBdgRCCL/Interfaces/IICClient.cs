@@ -46,17 +46,6 @@ namespace StdBdgRCCL.Interfaces
         /// <returns>A single record with model specified in Type</returns>
         Task<HttpResponse<T>> GetSingleByExample<T>(string resourceUri, IDictionary<string, string> properties = null) where T : new();
 
-        /// <summary>
-        /// Send a GET request and get all available records.
-        /// </summary>
-        /// <typeparam name="T">Resource Model</typeparam>
-        /// <param name="resourceUri">Resource Endpoint URI</param>
-        /// <param name="offset">Number of records to skip</param>
-        /// <param name="pagesize">Record limit</param>
-        /// <param name="properties">Properties to pass along for development purposes</param>
-        /// <returns>List of records with model specified in Type</returns>
-        Task<List<T>> GetAll<T>(string resourceUri, int offset = 0, int pagesize = 1000, IDictionary<string, string> properties = null);
-
         //===================================
         /// <summary>
         /// Send a PUT request
