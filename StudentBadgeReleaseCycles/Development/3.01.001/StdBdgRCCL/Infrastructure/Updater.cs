@@ -11,7 +11,7 @@ namespace StdBdgRCCL
 {
     public partial class Updater : IUpdater
     {
-        private readonly IAthenaeum _athen; 
+        private readonly IAthenaeum _athen;
         private readonly ILogger _logger;
         public enum TypeOfSync { EnrollmtChanges, SingleEnrStudent, SchoolAssociations, SpecialConditn }
 
