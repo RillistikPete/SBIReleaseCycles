@@ -31,7 +31,6 @@ namespace StdBadgeReleaseCycles
 
         public override void Configure(IFunctionsHostBuilder builder)
         {
-            //builder.Services.AddTransient<ExecutingHandler>();
             builder.Services.AddHttpClient("edfiClient", c =>
             {
                 c.BaseAddress = new Uri(edfiApiBaseUri + edfiBaseUri);
