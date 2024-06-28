@@ -1,6 +1,6 @@
 # SBI Release Cycles Azure Function
 
-.NET Core 2.1 Azure Function built using asynchronous programming and facade pattern
+.NET Core 2.1 Azure Function built using asynchronous programming and facade/repository pattern
 
 Uses resilient HTTP requests with client factory 🏭 
 
